@@ -43,4 +43,4 @@ Spellchecking bases on [language-tool-python](https://pypi.org/project/language-
 
 ## How to get started
 
-Due to the willness to handle each case, the [pynput](https://pypi.org/project/pynput/) library was extended to support the numeric keypad. **This tool will not work properly until the _pynput.keyboard._win32_ would not be updated with numeric keys.**
+Due to the willness to handle each case, the [pynput](https://pypi.org/project/pynput/) library was extended to support the numeric keypad. **This tool will not work properly until the _pynput.keyboard._win32_ would not be updated with numeric keys *** ([file](https://github.com/BaarTeek123/Biometric_system_based_on_behavioral_biometrics_typing_errors_in_English/blob/development/edited_key_class.txt) with extended _Key_ class that must replace the original one in _pynput.keyboard._win32.py_) 
