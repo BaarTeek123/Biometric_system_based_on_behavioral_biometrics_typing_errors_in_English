@@ -1,9 +1,11 @@
 import time
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from classifiers import build_tuned_nn, build_tuned_rfc, param_grid, create_neural_network
+
+import classifiers
+from classifiers import build_tuned_nn, build_tuned_rfc, param_grid
 from sklearn.neural_network import MLPClassifier
-from create_model import create_dataset, user_names
+from create_model import create_dataset
 from sklearn.svm import SVC
 from sklearn.utils import shuffle
 import numpy as np
@@ -12,6 +14,7 @@ from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_sco
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import resample
 
+from n_grams_creator import user_names
 
 if __name__ == "__main__":
 
@@ -39,8 +42,8 @@ if __name__ == "__main__":
 ]
 
 
-    X_train, y_train, X_test, y_test = create_dataset(test_ratio=0.5)
-    X_test, X_valid, y_test, y_valid = train_test_split(X_test, y_test, test_size=0.5, random_state=365)
+    X_train, y_train, X_test, y_test = create_dataset(test_ratio=0.5, if_separate_words=True)
+    history_dict = {}
     for user in np.unique(y_train):
         # Create balanced datasets for user and non-user
         user_mask_train = (y_train == user)
@@ -71,11 +74,13 @@ if __name__ == "__main__":
         X_balanced_test, y_balanced_test = shuffle(X_balanced_test, y_balanced_test, random_state=42)
 
         # Create and compile the model
-        model = create_neural_network(X_train.shape[1], binary=True)
+        # model = KerasNNClf(X_train.shape[1], len(user_names.keys()), True).create_neural_network()
+        model = classifiers.create_neural_network(X_train.shape[1], len(user_names.keys()), True)
 
         # Train the model with fewer epochs and a larger batch size
-        model.fit(X_balanced_train, y_balanced_train, epochs=5, batch_size=64)
-
+        history = model.fit(X_balanced_train, y_balanced_train, epochs=50, batch_size=64,
+                           )
+        history_dict[user] = history
         # Evaluate the model
         loss, accuracy = model.evaluate(X_balanced_test, y_balanced_test)
 
@@ -84,9 +89,57 @@ if __name__ == "__main__":
 
         # Generate and print the confusion matrix
         y_pred = model.predict(X_balanced_test).ravel()
+        for i in range(10):
+            y_pred_class = [1 if prob >= (i+1)/10 else 0 for prob in y_pred]
+            print(f"Threshold: {(i+1)/10}", confusion_matrix(y_balanced_test, y_pred_class))
 
-        y_pred_class = [1 if prob >= 0.5 else 0 for prob in y_pred]
-        print(confusion_matrix(y_balanced_test, y_pred_class))
+    # X_test, X_valid, y_test, y_valid = train_test_split(X_test, y_test, test_size=0.5, random_state=365)
+    # for user in np.unique(y_train):
+    #     # Create balanced datasets for user and non-user
+    #     user_mask_train = (y_train == user)
+    #     non_user_mask_train = (y_train != user)
+    #
+    #     user_mask_test = (y_test == user)
+    #     non_user_mask_test = (y_test != user)
+    #
+    #     # Concatenate user and non-user samples (equal numbers)
+    #     X_balanced_train = np.concatenate([X_train[user_mask_train],
+    #                                        resample(X_train[non_user_mask_train],
+    #                                                 n_samples=user_mask_train.sum(),
+    #                                                 random_state=42)])
+    #
+    #     y_balanced_train = np.concatenate([np.ones(user_mask_train.sum()),
+    #                                        np.zeros(user_mask_train.sum())])  # 1 for user, 0 for non-user
+    #
+    #     X_balanced_test = np.concatenate([X_test[user_mask_test],
+    #                                       resample(X_test[non_user_mask_test],
+    #                                                n_samples=user_mask_test.sum(),
+    #                                                random_state=42)])
+    #
+    #     y_balanced_test = np.concatenate([np.ones(user_mask_test.sum()),
+    #                                       np.zeros(user_mask_test.sum())])  # 1 for user, 0 for non-user
+    #
+    #     # Shuffling the balanced train and test sets
+    #     X_balanced_train, y_balanced_train = shuffle(X_balanced_train, y_balanced_train, random_state=42)
+    #     X_balanced_test, y_balanced_test = shuffle(X_balanced_test, y_balanced_test, random_state=42)
+    #
+    #     # Create and compile the model
+    #     model = KerasNNClf(X_train.shape[1], len(user_names.keys()), True).create_neural_network()
+    #
+    #     # Train the model with fewer epochs and a larger batch size
+    #     history = model.fit(X_balanced_train, y_balanced_train, epochs=100, batch_size=64, callbacks=[model.earlystopping, model.logger])
+    #
+    #     # Evaluate the model
+    #     loss, accuracy = model.evaluate(X_balanced_test, y_balanced_test)
+    #
+    #     print('Test loss:', loss)
+    #     print('Test accuracy:', accuracy)
+    #
+    #     # Generate and print the confusion matrix
+    #     y_pred = model.predict(X_balanced_test).ravel()
+    #
+    #     y_pred_class = [1 if prob >= 0.5 else 0 for prob in y_pred]
+    #     print(confusion_matrix(y_balanced_test, y_pred_class))
 
     # unique_users_train = np.unique(y_train)
     # unique_users_test = np.unique(y_test)

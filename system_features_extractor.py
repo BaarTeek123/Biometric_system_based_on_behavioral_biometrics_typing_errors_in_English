@@ -85,10 +85,7 @@ class ListOfWords:
                 tag = self.original_sentence_structure[i]
                 if self.tokenized_corrected_sentence:
                     correct_word = difflib.get_close_matches(original_word, self.tokenized_corrected_sentence, n=1)
-                    if correct_word:
-                        correct_word = str(correct_word[0])
-                    else:
-                        correct_word = None
+                    correct_word = str(correct_word[0]) if correct_word else None
                 else:
                     correct_word = None
                 if original_word != correct_word:
@@ -122,10 +119,10 @@ class ListOfWords:
 def get_freq_word(list_of_words: ListOfWords, freq_dict: dict):
     if isinstance(list_of_words, ListOfWords) and isinstance(freq_dict, dict):
         for word_istance in list_of_words.all_words:
-            if word_istance.original_word not in freq_dict.keys():
-                freq_dict[word_istance.original_word] = 1
-            else:
+            if word_istance.original_word in freq_dict:
                 freq_dict[word_istance.original_word] += 1
+            else:
+                freq_dict[word_istance.original_word] = 1
     return freq_dict
 
 
@@ -154,15 +151,9 @@ def read_json_file(path_to_file):
 
 def write_object_to_json_file(path_to_file: str, key: str, main_dictionary: dict):
     if os.path.isfile(path_to_file) and os.path.getsize(path_to_file) > 0:
-        # open file
-        data = read_json_file(path_to_file)
-        # clear file
-        open(path_to_file, 'w').close()
-        # add data
-        file = open(path_to_file, 'a+')
-        data[key].append(main_dictionary)
-        file.seek(0)
-        json.dump(data, file, indent=4)
+        file = __append_to_exisiting_file(
+            path_to_file, key, main_dictionary
+        )
     else:
         file = open(path_to_file, 'w+')
         tmp = {key: [main_dictionary]}
@@ -170,23 +161,39 @@ def write_object_to_json_file(path_to_file: str, key: str, main_dictionary: dict
     file.close()
 
 
+# TODO Rename this here and in `write_object_to_json_file`
+def __append_to_exisiting_file(path_to_file, key, main_dictionary):
+    # open file
+    data = read_json_file(path_to_file)
+    # clear file
+    open(path_to_file, 'w').close()
+        # add data
+    result = open(path_to_file, 'a+')
+    data[key].append(main_dictionary)
+    result.seek(0)
+    json.dump(data, result, indent=4)
+    return result
+
+
 def add_simple_dict_to_json_file(path_to_file: str, key: str, dict_obj: dict):
     # check if is empty
-    if os.path.isfile(path_to_file) and os.path.getsize(path_to_file) > 0:
-        data = read_json_file(path_to_file)
-        open(path_to_file, 'w').close()
-        file = open(path_to_file, 'a+')
+    if not os.path.isfile(path_to_file) or os.path.getsize(path_to_file) <= 0:
+        return
+    data = read_json_file(path_to_file)
+    open(path_to_file, 'w').close()
+    with open(path_to_file, 'a+') as file:
         if isinstance(dict_obj, dict) and dict_obj.keys():
             if key in data.keys():
-                for k in dict_obj.keys():
+                for k in dict_obj:
                     if k not in data[key].keys():
                         data[key][k] = dict_obj[k]
-                    elif k in data[key].keys() and (isinstance(data[key][k], int) or isinstance(data[key][k], float)):
+                    elif k in data[key].keys() and (
+                        isinstance(data[key][k], (int, float))
+                    ):
                         data[key][k] += dict_obj[k]
             else:
                 data[key] = dict_obj
         json.dump(data, file, indent=4)
-        file.close()
 
 
 def add_str_to_json(path_to_file: str, user_name: str):
@@ -194,10 +201,9 @@ def add_str_to_json(path_to_file: str, user_name: str):
     if os.path.isfile(path_to_file) and os.path.getsize(path_to_file) > 0:
         data = read_json_file(path_to_file)
         open(path_to_file, 'w').close()
-        file = open(path_to_file, 'a+')
-        data["Name"] = user_name
-        json.dump(data, file, indent=4)
-        file.close()
+        with open(path_to_file, 'a+') as file:
+            data["Name"] = user_name
+            json.dump(data, file, indent=4)
 
 
 def add_list_to_json_file(path_to_file: str, key: str, list_obj: list):
@@ -205,13 +211,12 @@ def add_list_to_json_file(path_to_file: str, key: str, list_obj: list):
     if os.path.isfile(path_to_file) and os.path.getsize(path_to_file) > 0:
         data = read_json_file(path_to_file)
         open(path_to_file, 'w').close()
-        file = open(path_to_file, 'a+')
-        if key in data.keys() and isinstance(data[key], list):
-            data[key].extend(list_obj)
-        elif key not in data.keys():
-            data[key] = list_obj
-        json.dump(data, file, indent=4)
-        file.close()
+        with open(path_to_file, 'a+') as file:
+            if key in data.keys() and isinstance(data[key], list):
+                data[key].extend(list_obj)
+            elif key not in data.keys():
+                data[key] = list_obj
+            json.dump(data, file, indent=4)
 
 
 def extract_data(source_file_path, dest_file_path, user_name: str):

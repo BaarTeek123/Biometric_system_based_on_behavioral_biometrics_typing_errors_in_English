@@ -1,5 +1,4 @@
 from csv import DictWriter
-import os
 from create_model import cols
 from sklearn.metrics import roc_curve, auc, confusion_matrix, ConfusionMatrixDisplay
 from itertools import cycle

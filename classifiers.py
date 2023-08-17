@@ -1,44 +1,73 @@
 import tensorflow as tf
-import keras
-from create_model import user_names
+from n_grams_creator import user_names
 from keras import Sequential
 from keras import layers
 from keras import optimizers
 from keras_tuner.tuners import RandomSearch
 from sklearn.model_selection import RandomizedSearchCV
-
+from keras import initializers
 print(tf.config.list_physical_devices('GPU'))
+from keras import callbacks
 
 
-def create_neural_network(input_dim, output_dim=len(user_names.keys()), binary=False):
+# def create_neural_network(input_dim, output_dim=len(user_names.keys()), binary=False):
+#     # create sequential model
+#     model = keras.Sequential()
+#     model.add(keras.layers.Dense(128, activation='relu', name='layer_1', input_dim=input_dim))
+#     model.add(keras.layers.BatchNormalization())
+#     # model.add(keras.layers.Dropout(0.5))
+#     model.add(keras.layers.Dense(64, activation='relu', name='layer_2'))
+#     model.add(keras.layers.BatchNormalization())
+#     model.add(keras.layers.Dropout(0.5))
+#     model.add(keras.layers.Dense(32, activation='relu', name='layer_3'))
+#     model.add(keras.layers.BatchNormalization())
+#     # model.add(keras.layers.Dropout(0.5))
+#     model.add(keras.layers.Dense(16, activation='relu', name='layer_4'))
+#     model.add(keras.layers.BatchNormalization(momentum=0.95, epsilon=0.005,
+#                                               beta_initializer=keras.initializers.RandomNormal(mean=0.0, stddev=0.05),
+#                                               gamma_initializer=keras.initializers.Constant(value=0.9)))
+#     model.add(keras.layers.Dropout(0.5))
+#     if not binary:
+#         model.add(keras.layers.Dense(output_dim, activation='softmax', name='output_layer'))
+#         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+#
+#     else:
+#         model.add(
+#             keras.layers.Dense(1, activation='sigmoid', name='output_layer'))  # Two classes: the user and all others
+#
+#         model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])  # Binary problem now
+#
+#     return model
+
+earlystopping = callbacks.EarlyStopping(monitor="accuracy",
+                                        mode="max", patience=7,
+                                        restore_best_weights=True)
+logger = callbacks.TensorBoard(log_dir='logs', write_graph=True, histogram_freq=1, )
+def create_neural_network(input_dim,output_dim, binary=False):
     # create sequential model
-    model = keras.Sequential()
-    model.add(keras.layers.Dense(128, activation='relu', name='layer_1', input_dim=input_dim))
-    model.add(keras.layers.BatchNormalization())
+    model = Sequential()
+    model.add(layers.Dense(128, activation='relu', name='layer_1', input_dim=input_dim))
+    model.add(layers.BatchNormalization())
     # model.add(keras.layers.Dropout(0.5))
-    model.add(keras.layers.Dense(64, activation='relu', name='layer_2'))
-    model.add(keras.layers.BatchNormalization())
-    model.add(keras.layers.Dropout(0.5))
-    model.add(keras.layers.Dense(32, activation='relu', name='layer_3'))
-    model.add(keras.layers.BatchNormalization())
+    model.add(layers.Dense(64, activation='relu', name='layer_2'))
+    model.add(layers.BatchNormalization())
+    model.add(layers.Dropout(0.5))
+    model.add(layers.Dense(32, activation='relu', name='layer_3'))
+    model.add(layers.BatchNormalization())
     # model.add(keras.layers.Dropout(0.5))
-    model.add(keras.layers.Dense(16, activation='relu', name='layer_4'))
-    model.add(keras.layers.BatchNormalization(momentum=0.95, epsilon=0.005,
-                                              beta_initializer=keras.initializers.RandomNormal(mean=0.0, stddev=0.05),
-                                              gamma_initializer=keras.initializers.Constant(value=0.9)))
-    model.add(keras.layers.Dropout(0.5))
+    model.add(layers.Dense(16, activation='relu', name='layer_4'))
+    model.add(layers.BatchNormalization(momentum=0.95, epsilon=0.005,
+                                        beta_initializer=initializers.RandomNormal(mean=0.0,
+                                                                                   stddev=0.05),
+                                        gamma_initializer=initializers.Constant(value=0.9)))
     if not binary:
-        model.add(keras.layers.Dense(output_dim, activation='softmax', name='output_layer'))
+        model.add(layers.Dense(output_dim, activation='softmax', name='output_layer'))
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-
     else:
-        model.add(
-            keras.layers.Dense(1, activation='sigmoid', name='output_layer'))  # Two classes: the user and all others
-
-        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])  # Binary problem now
-
+        model.add(layers.Dense(1, activation='sigmoid',
+                               name='output_layer'))
+        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
-
 
 def build_model_nn(hp, output_dim=len(user_names.keys())):
     model = Sequential()
@@ -58,8 +87,7 @@ def build_tuned_nn(x_train, y_train):
 
     best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
 
-    model = tuner.hypermodel.build(best_hps)
-    return model
+    return tuner.hypermodel.build(best_hps)
 
 
 param_grid = {

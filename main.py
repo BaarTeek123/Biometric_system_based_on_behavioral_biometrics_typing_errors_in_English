@@ -1,18 +1,52 @@
-import time
+import datetime
+
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from classifiers import create_neural_network, build_tuned_nn, build_tuned_rfc, param_grid
+from sklearn.preprocessing import Normalizer, StandardScaler
+
+from classifiers import build_tuned_nn, build_tuned_rfc, param_grid
 from sklearn.neural_network import MLPClassifier
 import pandas as pd
-from create_model import create_dataset, user_names
+from create_model import create_dataset, NUMBER_OF_FEATURES, N_GRAM_SIZE
 from sklearn.svm import SVC
-from cv import run_cv
-from sklearn.metrics import accuracy_score
-import numpy as np
+from cv import run_cv, run_cv_neural_network
 
-import keras
-import tensorflow as tf
-from sklearn.model_selection import train_test_split
+
+
+
+
+if __name__ == '__main__':
+        day = datetime.date.strftime()
+        CLASSIFIERS = [
+            (RandomForestClassifier(), param_grid['Random Forest'], 'Random Forest'),
+
+            (KNeighborsClassifier(), param_grid['K-Nearest Neighbors'], 'K-Nearest Neighbors'),
+            (SVC(probability=True), param_grid['SVC'], 'SVC'),
+
+            (GradientBoostingClassifier(), param_grid['Gradient Boosting'], 'Gradient Boosting'),
+
+            (MLPClassifier(), param_grid['MLP Classifier'], 'MLP Classifier'),
+        ]
+        results = []
+        X, y, X_test, y_train, cols = create_dataset(if_separate_words=True, test_ratio=0.3, verbose_mode=True, scaler=StandardScaler())
+        print(cols)
+        res = run_cv_neural_network(X, y, X_test, y_train)
+        res['number of features'] = NUMBER_OF_FEATURES
+        res['ngram size'] = N_GRAM_SIZE
+        res['columns'] = str(cols)
+
+        # res = run_cv_neural_network(X, y)
+        res.to_csv('nn_sep.csv', mode='a+')
+        # for clf in CLASSIFIERS:
+            # X, y, X_test, y_train = create_dataset(if_separate_words=True, test_ratio=0.2)
+            # res = run_cv(clf[0], clf[1], X, y, X_test, y_train)
+            # res.to_csv('clf_sep.csv', mode='a+')
+
+            # X,X_valid, y, y_valid = train_test_split(X, y, test_size=0.2)
+            # res = run_cv(clf[0], clf[1], X, y, X_valid, y_valid)
+            # results.append(res)
+            # res.to_csv(f'{clf}.csv')
+'''
 
 if __name__ == "__main__":
 
@@ -117,3 +151,4 @@ if __name__ == "__main__":
         results = pd.concat([results, cv_res], ignore_index=True)
         cv_res.to_csv(f'{clf_name}.csv', mode='w+')
     results.to_csv('results.csv', mode='w+')
+'''

@@ -16,8 +16,8 @@ def get_console_handler(formattter):
 
 def get_file_handler(log_file: str, formattter):
 
-    if not os.path.isfile(log_file) and os.path.exists(log_file):
-        with open('logs.log', 'w+') as f:
+    if not os.path.isfile(log_file) and os.path.exists(log_file) :
+        with open(os.path.normpath(LOG_FILE), 'w+') as f:
             f.write('')
     elif not os.path.exists(log_file):
         raise Exception(f'No such directory: {log_file}')
