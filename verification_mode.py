@@ -1,7 +1,7 @@
 import time
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neighbors import KNeighborsClassifier
-
+import pandas as pd
 import classifiers
 from classifiers import build_tuned_nn, build_tuned_rfc, param_grid
 from sklearn.neural_network import MLPClassifier
@@ -10,7 +10,8 @@ from sklearn.svm import SVC
 from sklearn.utils import shuffle
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, \
+    classification_report
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import resample
 
@@ -44,7 +45,9 @@ if __name__ == "__main__":
 
     X_train, y_train, X_test, y_test = create_dataset(test_ratio=0.5, if_separate_words=True)
     history_dict = {}
+    df_list = []
     for user in np.unique(y_train):
+
         # Create balanced datasets for user and non-user
         user_mask_train = (y_train == user)
         non_user_mask_train = (y_train != user)
@@ -90,8 +93,14 @@ if __name__ == "__main__":
         # Generate and print the confusion matrix
         y_pred = model.predict(X_balanced_test).ravel()
         for i in range(10):
-            y_pred_class = [1 if prob >= (i+1)/10 else 0 for prob in y_pred]
+            y_pred_class = [1. if prob >= (i+1)/10 else 0. for prob in y_pred]
             print(f"Threshold: {(i+1)/10}", confusion_matrix(y_balanced_test, y_pred_class))
+            report_df = pd.concat([pd.DataFrame(classification_report(y_balanced_test, y_pred_class, output_dict=True)).transpose()], keys=[f'{user} - Threshold: {(i+1)/10}'], names=['User-threshold'])
+            df_list.append(report_df)
+            print(report_df)
+    final_df = pd.concat(df_list)
+    final_df['clf']='Neural network'
+    final_df.to_csv('verification_test')
 
     # X_test, X_valid, y_test, y_valid = train_test_split(X_test, y_test, test_size=0.5, random_state=365)
     # for user in np.unique(y_train):

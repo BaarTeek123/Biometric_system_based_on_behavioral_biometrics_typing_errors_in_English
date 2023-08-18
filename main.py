@@ -16,7 +16,7 @@ from cv import run_cv, run_cv_neural_network
 
 
 if __name__ == '__main__':
-        day = datetime.date.strftime()
+
         CLASSIFIERS = [
             (RandomForestClassifier(), param_grid['Random Forest'], 'Random Forest'),
 
@@ -28,24 +28,27 @@ if __name__ == '__main__':
             (MLPClassifier(), param_grid['MLP Classifier'], 'MLP Classifier'),
         ]
         results = []
-        X, y, X_test, y_train, cols = create_dataset(if_separate_words=True, test_ratio=0.3, verbose_mode=True, scaler=StandardScaler())
-        print(cols)
-        res = run_cv_neural_network(X, y, X_test, y_train)
+        X, y, X_test, y_test, cols = create_dataset(if_separate_words=True, test_ratio=0.5, verbose_mode=True, scaler=StandardScaler())
+        plot_path = 'plots/3_5/'
+        res = run_cv_neural_network(X, y, X_test, y_test,epochs=50, plot_path=plot_path)
         res['number of features'] = NUMBER_OF_FEATURES
         res['ngram size'] = N_GRAM_SIZE
         res['columns'] = str(cols)
 
-        # res = run_cv_neural_network(X, y)
-        res.to_csv('nn_sep.csv', mode='a+')
-        # for clf in CLASSIFIERS:
-            # X, y, X_test, y_train = create_dataset(if_separate_words=True, test_ratio=0.2)
-            # res = run_cv(clf[0], clf[1], X, y, X_test, y_train)
-            # res.to_csv('clf_sep.csv', mode='a+')
+        res = run_cv_neural_network(X, y)
+        res.to_csv('nn.csv', mode='a+')
 
-            # X,X_valid, y, y_valid = train_test_split(X, y, test_size=0.2)
-            # res = run_cv(clf[0], clf[1], X, y, X_valid, y_valid)
-            # results.append(res)
-            # res.to_csv(f'{clf}.csv')
+        for clf in CLASSIFIERS:
+            if clf[1] is not None:
+                res = run_cv(clf[0], clf[1], X, y, X_test, y_test, name=clf[2])
+            else:
+                res = run_cv(clf[0], None, X, y, X_test, y_test, name=clf[2], predef_model=True, plot_path=plot_path)
+
+            res['number of features'] = NUMBER_OF_FEATURES
+            res['ngram size'] = N_GRAM_SIZE
+            res['columns'] = str(cols)
+            res.to_csv(f'{clf[2]}.csv', mode='a+')
+
 '''
 
 if __name__ == "__main__":
