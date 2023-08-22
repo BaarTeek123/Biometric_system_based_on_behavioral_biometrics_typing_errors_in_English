@@ -8,6 +8,11 @@ from nltk import pos_tag as nltk_pos_tag
 from nltk.tokenize import RegexpTokenizer
 from re import sub
 from string_metrics import Distances
+from gramformer import Gramformer
+
+
+gramformer_tool = Gramformer(models=1)
+# language_tool = LanguageTool('en-US')
 
 
 def correct_spelling_autocorrect(sentence) -> str:
@@ -15,12 +20,19 @@ def correct_spelling_autocorrect(sentence) -> str:
     return Speller()(sentence)
 
 
-language_tool = LanguageTool('en-US')
+
+def correct_with_gramformer(sentence: str) -> str:
+    """ A function which returns corrected sentence using GramFormer (from gramformer)"""
+    return list(gramformer_tool.correct(sentence))[0]
 
 
-def correct_language_tool(sentence: str) -> str:
-    """ A function which returns corrected sentence (by language_tool from language_tool_python)"""
-    return language_tool.correct(sentence)
+# def correct_language_tool(sentence: str) -> str:
+#     """ A function which returns corrected sentence (by language_tool from language_tool_python)"""
+#     return language_tool.correct(sentence)
+
+def correct_sentence(sentence: str)-> str:
+    return correct_with_gramformer(correct_spelling_autocorrect(sentence))
+
 
 
 class Word:
@@ -45,7 +57,7 @@ class ListOfWords:
     def __init__(self, sentence: str, add_by_left_click: bool = False, is_from_file: bool = False):
         # assign sentence without punctuation
         self.original_sentence = sub(self.__sentence_reg_pattern, '', sentence)
-        self.corrected_sentence = correct_language_tool(self.original_sentence)
+        self.corrected_sentence = correct_sentence(self.original_sentence)
         # capitalize sentence (due to specificity of the language_tool)
         if self.original_sentence and (
                 self.original_sentence[0].islower() and self.corrected_sentence[0].isupper()):

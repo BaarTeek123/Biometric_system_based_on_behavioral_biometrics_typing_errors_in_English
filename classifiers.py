@@ -92,9 +92,9 @@ def build_tuned_nn(x_train, y_train):
 
 param_grid = {
     'Random Forest': {
-        'n_estimators': [10, 50],  # , 100, 200],
-        'max_depth': [None, 10, 20, 30],  # , 40, 50],
-        'min_samples_split': [2, 5],  # , 10],
+        'n_estimators': [10, 50, 100],  # , 100, 200],
+        # 'max_depth': [None, 10, 20, 30],  # , 40, 50],
+        'min_samples_split': [2, 5, 10],
         'min_samples_leaf': [1, 2, 4],
         'max_features': ['log2', 'sqrt', None]
     },

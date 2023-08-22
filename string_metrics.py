@@ -1,6 +1,5 @@
 import textdistance
 
-
 class EditOperation:
     ml_repr_size = 8
 

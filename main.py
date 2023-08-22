@@ -1,12 +1,9 @@
-import datetime
-
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import Normalizer, StandardScaler
-
 from classifiers import build_tuned_nn, build_tuned_rfc, param_grid
 from sklearn.neural_network import MLPClassifier
-import pandas as pd
+from os import path, makedirs
 from create_model import create_dataset, NUMBER_OF_FEATURES, N_GRAM_SIZE
 from sklearn.svm import SVC
 from cv import run_cv, run_cv_neural_network
@@ -29,25 +26,27 @@ if __name__ == '__main__':
         ]
         results = []
         X, y, X_test, y_test, cols = create_dataset(if_separate_words=True, test_ratio=0.5, verbose_mode=True, scaler=StandardScaler())
-        plot_path = 'plots/3_5/'
-        res = run_cv_neural_network(X, y, X_test, y_test,epochs=50, plot_path=plot_path)
+        PLOT_PATH = f'plots/{N_GRAM_SIZE}_{NUMBER_OF_FEATURES}/'
+        if not path.exists(PLOT_PATH):
+            makedirs(PLOT_PATH)
+
+
+        res = run_cv_neural_network(X, y, X_test, y_test, epochs=5, plot_path=PLOT_PATH)
         res['number of features'] = NUMBER_OF_FEATURES
         res['ngram size'] = N_GRAM_SIZE
         res['columns'] = str(cols)
-
-        res = run_cv_neural_network(X, y)
-        res.to_csv('nn.csv', mode='a+')
+        res.to_csv('results_identification/nn.csv', mode='a+')
 
         for clf in CLASSIFIERS:
             if clf[1] is not None:
                 res = run_cv(clf[0], clf[1], X, y, X_test, y_test, name=clf[2])
             else:
-                res = run_cv(clf[0], None, X, y, X_test, y_test, name=clf[2], predef_model=True, plot_path=plot_path)
+                res = run_cv(clf[0], None, X, y, X_test, y_test, name=clf[2], predef_model=True, plot_path=PLOT_PATH)
 
             res['number of features'] = NUMBER_OF_FEATURES
             res['ngram size'] = N_GRAM_SIZE
             res['columns'] = str(cols)
-            res.to_csv(f'{clf[2]}.csv', mode='a+')
+            res.to_csv(f'results_identification/{clf[2]}.csv', mode='a+')
 
 '''
 

@@ -7,8 +7,8 @@ from sklearn.preprocessing import Normalizer, StandardScaler
 
 DIRECTORY = os.path.join('models', 'json_files')
 
-NUMBER_OF_FEATURES = 5 # liczba cech / słowo
-N_GRAM_SIZE = 3 # liczba słow w wektorze
+NUMBER_OF_FEATURES = 8 # liczba cech / słowo
+N_GRAM_SIZE = 2 # liczba słow w wektorze
 AMOUNT_OF_N_GRAMS_PERS_USER = 35000
 
 COLUMNS = [
