@@ -58,6 +58,11 @@ def on_online_start():
             online_listener.destination_json_file_path = file_name[:-5] + "_online" + file_name[-5:]
         tkinter.messagebox.showwarning(title=title, message="Listener IS running! Your destination file is: " +
                                                             str(online_listener.destination_json_file_path))
+def confirm_nickname():
+    global file_name, nickname_entry
+    nickname = nickname_entry.get()
+    file_name = get_destination_file_name(nickname)
+    tkinter.messagebox.showinfo(title="Nickname Confirmed", message=f"Destination file changed to: {file_name}")
 
 
 def press_end_combination():
@@ -81,31 +86,13 @@ def online_stop():
         tkinter.messagebox.showwarning(title=title, message="Listener IS NOT running!")
 
 
-def set_path():
-    global online_listener, file_name, offline_lstnr
-    folder_selected = filedialog.askdirectory()
-    file_name = None
-    if os.path.isdir(folder_selected):
-        if folder_selected[-1] in '/\\':
-            file_name = str(folder_selected) + 'destination.json'
-        elif '\\' in folder_selected:
-            file_name = str(folder_selected) + '\\destination.json'
-        elif '/' in folder_selected:
-            file_name = str(folder_selected) + '/destination.json'
-    if isinstance(online_listener, RealTimeKeyListener) and file_name:
-        online_listener.destination_json_file_path = file_name[:-5] + "_online" + file_name[-5:]
-        print(online_listener.destination_json_file_path)
-    if isinstance(offline_lstnr, OfflineListener) and file_name:
-        offline_lstnr.destination_json_file_path = file_name[:-5] + "_offline" + file_name[-5:]
-
-
 def offline_start():
     global file_name
     offline_lstnr = OfflineListener()
     file_selected = filedialog.askopenfilename(filetypes=[('TXT', '*.txt'), ('PDF', '*pdf'), ('DOCX', '*docx')])
     offline_lstnr.source_txt_file_path = file_selected
     if file_name is not None:
-        offline_lstnr.destination_json_file_path = file_name[:-5] + "_offline" + file_name[-5:]
+        offline_lstnr.destination_json_file_path = file_name
     tkinter.messagebox.showinfo(title=title,
                                 message="You have just chosen" + str(file_selected)
                                         + "\nDestination_file is: " + offline_lstnr.destination_json_file_path)
@@ -135,51 +122,83 @@ def non_ex_agreement():
     non_agreement(ex_title, ex_msg)
 
 
+def get_destination_file_name(nickname):
+    if nickname:
+        return nickname + '.json'
+    else:
+        return 'destination.json'
+
+
+# Modify the set_path function
+def set_path():
+    global online_listener, file_name, offline_lstnr, nickname_entry
+    folder_selected = filedialog.askdirectory()
+    nickname = nickname_entry.get()  # Get the nickname from the Entry widget
+    file_name = os.path.join(folder_selected, get_destination_file_name(nickname))
+
+    if isinstance(online_listener, RealTimeKeyListener) and file_name:
+        online_listener.destination_json_file_path = file_name[:-5] + "_online" + file_name[-5:]
+        print(online_listener.destination_json_file_path)
+    if isinstance(offline_lstnr, OfflineListener) and file_name:
+        offline_lstnr.destination_json_file_path = file_name[:-5] + "_offline" + file_name[-5:]
+
+
 if __name__ == '__main__':
     try:
         online_listener, file_name, offline_lstnr = None, None, None
-        background = '#486098'
-        button_colour = "#FFEDCB"
-        active_button_colour = "#fff6e6"
+        background = '#2C3E50'
+        button_colour = "#3498DB"
+        active_button_colour = "#2980B9"
+        text_color = "#ECF0F1"
 
         root = tk.Tk()
-        root.geometry('600x500')
+        root.geometry('800x600')
         root.resizable(True, True)
         root.title(title)
-        root.configure(background='#1C5685', highlightbackground='red')
+        root.configure(background=background)
+
         myFont = font.Font(weight='bold', family='Century Gothic', size=12)
-        # start_button
+        titleFont = font.Font(weight='bold', family='Century Gothic', size=16)
+
+        # Title Label
+        titleLabel = tk.Label(root, text="Listener by BM", bg=background, fg=text_color, font=titleFont)
+        titleLabel.pack(pady=20)
+
+        nickname_label = tk.Label(root, text="Enter Nickname:", bg=background, fg=text_color, font=myFont)
+        nickname_label.pack(pady=10)
+        nickname_entry = tk.Entry(root, bg="white", fg="black", width=30, font=myFont)
+        nickname_entry.pack(pady=10)
+
+        confirm_nickname_button = tk.Button(root, command=confirm_nickname, text="Confirm Nickname", bg=button_colour,
+                                            fg=text_color, width=25, height=2, activebackground=active_button_colour,
+                                            font=myFont)
+        confirm_nickname_button.pack(pady=15)
+
+        # Start Button
         start_button = tk.Button(root, command=on_online_start, text="Start Online Listener", bg=button_colour,
-                                 width=20,
-                                 height=1, activebackground=active_button_colour)
-        start_button['font'] = myFont
-        start_button.pack(ipadx=5, ipady=5, expand=True)
+                                 fg=text_color, width=25, height=2, activebackground=active_button_colour, font=myFont)
+        start_button.pack(pady=15)
 
-        # stop_button
-        stop_button = tk.Button(root, command=online_stop, text="Stop Online Listener", bg=button_colour, width=20,
-                                height=1,
-                                activebackground=active_button_colour)
-        stop_button.pack(ipadx=5, ipady=5, expand=True)
-        stop_button['font'] = myFont
+        # Stop Button
+        stop_button = tk.Button(root, command=online_stop, text="Stop Online Listener", bg=button_colour, fg=text_color,
+                                width=25, height=2, activebackground=active_button_colour, font=myFont)
+        stop_button.pack(pady=15)
 
-        offline_btn = tk.Button(root, command=offline_start, text="Offline Listener", bg=button_colour, width=20,
-                                height=1,
-                                activebackground=active_button_colour)
-        offline_btn.pack(ipadx=5, ipady=5, expand=True)
-        offline_btn['font'] = myFont
+        # Offline Button
+        offline_btn = tk.Button(root, command=offline_start, text="Offline Listener", bg=button_colour, fg=text_color,
+                                width=25, height=2, activebackground=active_button_colour, font=myFont)
+        offline_btn.pack(pady=15)
 
-        set_path_button = tk.Button(root, command=set_path, text="Set path for end files", bg=button_colour, width=20,
-                                    height=1,
-                                    activebackground=active_button_colour)
-        set_path_button.pack(ipadx=5, ipady=5, expand=True)
-        set_path_button['font'] = myFont
+        # Set Path Button
+        set_path_button = tk.Button(root, command=set_path, text="Set path for end files", bg=button_colour, fg=text_color,
+                                    width=25, height=2, activebackground=active_button_colour, font=myFont)
+        set_path_button.pack(pady=15)
 
-        # exit_button
+        # Exit Button
+        exit_button = tk.Button(root, text='Exit', command=non_ex_agreement, bg=button_colour, fg=text_color, width=25,
+                                height=2, activebackground=active_button_colour, font=myFont)
+        exit_button.pack(pady=15)
 
-        exit_button = tk.Button(root, text='Exit', command=non_ex_agreement, bg=button_colour, width=20, height=1,
-                                activebackground=active_button_colour)
-        exit_button.pack(ipadx=5, ipady=5, expand=True)
-        exit_button['font'] = myFont
         agreement('GDPR clause', en_msg)
 
         root.mainloop()

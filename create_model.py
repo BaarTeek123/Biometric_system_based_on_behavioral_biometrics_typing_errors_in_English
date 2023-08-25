@@ -37,7 +37,8 @@ COLUMNS = [
 def create_dataset(number_of_features = NUMBER_OF_FEATURES,amount_of_n_grams_pers_user = AMOUNT_OF_N_GRAMS_PERS_USER,
                    n_gram_size = N_GRAM_SIZE, source_directory=DIRECTORY, columns=COLUMNS, verbose_mode=False, test_ratio = 0.5, if_separate_words = True, scaler = Normalizer()):
     # load data from directory
-    df = load_data(source_directory, columns)
+    df = load_data(source_directory, columns, verbose_mode=verbose_mode)
+
 
     # split into 2 sets
     # test_valid_bucket_per_user = int(minimum_words_num * 0.5)
@@ -89,3 +90,7 @@ def create_dataset(number_of_features = NUMBER_OF_FEATURES,amount_of_n_grams_per
         return X_train, y_train, X_test, y_test, chosen_columns_names
     return X_train, y_train, X_test, y_test
 
+
+
+if __name__ == '__main__':
+    X_train, y_train, X_test, y_test = create_dataset(test_ratio=0.5, if_separate_words=True, scaler=Normalizer())

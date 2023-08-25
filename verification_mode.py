@@ -14,8 +14,10 @@ from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_sco
     classification_report
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import resample
+import tensorflow_decision_forests as tfdf
+import tensorflow as tf
 
-from n_grams_creator import user_names
+from draw_results import calculate_cmc
 
 if __name__ == "__main__":
 
@@ -78,20 +80,26 @@ if __name__ == "__main__":
 
         # Create and compile the model
         # model = KerasNNClf(X_train.shape[1], len(user_names.keys()), True).create_neural_network()
-        model = classifiers.create_neural_network(X_train.shape[1], len(user_names.keys()), True)
+        # model = classifiers.create_neural_network(X_train.shape[1], len(user_names.keys()), True)
 
-        # Train the model with fewer epochs and a larger batch size
-        history = model.fit(X_balanced_train, y_balanced_train, epochs=50, batch_size=64,
-                           )
-        history_dict[user] = history
-        # Evaluate the model
-        loss, accuracy = model.evaluate(X_balanced_test, y_balanced_test)
+        model = tfdf.keras.GradientBoostedTreesModel(hyperparameter_template="benchmark_rank1")
 
-        print('Test loss:', loss)
-        print('Test accuracy:', accuracy)
+        train_ds = tf.data.Dataset.from_tensor_slices((X_balanced_train, y_balanced_train)).batch(1000)
+        test_ds = tf.data.Dataset.from_tensor_slices((X_balanced_test, y_balanced_test)).batch(1000)
+        history_dict = {}
 
-        # Generate and print the confusion matrix
-        y_pred = model.predict(X_balanced_test).ravel()
+        # class_weights = (np.bincount(y_train.astype(int)).max() / np.bincount(y_train.astype(int))).tolist()
+
+        # Drop that Gradient Boosted Trees bassline!
+        model = tfdf.keras.GradientBoostedTreesModel(hyperparameter_template="benchmark_rank1")
+
+        model.compile(metrics=["accuracy"])
+
+        # Raise the roof with some training!
+        model.fit(train_ds)
+        y_pred = model.predict(test_ds, use_multiprocessing=True, workers=5).ravel()
+
+
         for i in range(10):
             y_pred_class = [1. if prob >= (i+1)/10 else 0. for prob in y_pred]
             print(f"Threshold: {(i+1)/10}", confusion_matrix(y_balanced_test, y_pred_class))

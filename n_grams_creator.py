@@ -14,7 +14,16 @@ import math
 # assign ids to pos_tags
 pos_tags = ['CC', 'CD', 'DT', 'EX', 'FW', 'IN', 'JJ', 'JJR', 'JJS', 'LS', 'MD', 'NN', 'NNP', 'NNPS', 'NNS', 'PDT',
             'POS', 'PRP', 'PRP$', 'RB', 'RBR', 'RBS', 'RP', 'SYM', 'TO', 'UH', 'VB', 'VBD', 'VBG', 'VBN', 'VBP', 'VBZ',
-            'WDT', 'WP', 'WP$', 'WRB']
+            'WDT', 'WP', 'WP$', 'WRB', 'X']
+
+
+def get_pos_tag(k, pos_tags_list = pos_tags):
+    if k in pos_tags_list:
+        return pos_tags_list[k]
+    else: return 'X'
+
+
+
 tmp = {}
 i = 0
 for tag in pos_tags:
@@ -57,7 +66,7 @@ cols = [
 ]
 
 @log_info
-def get_misspelled_words_df_from_json(file_path: str, columns: list, use_tags: bool = True):
+def get_misspelled_words_df_from_json(file_path: str, columns: list, use_tags: bool = True, verbose_mode: bool= False):
     cols = columns
     global user_names
     misspelled = pd.DataFrame(columns=cols)
@@ -92,16 +101,22 @@ def get_misspelled_words_df_from_json(file_path: str, columns: list, use_tags: b
     else:
         if name not in user_names.keys():
             user_names[name] = max(user_names.values()) + 1
-    misspelled['user_label'] = [user_names[name] for _ in range(misspelled.shape[0])]
+    if verbose_mode:
+        misspelled['user_label'] = [name for _ in range(misspelled.shape[0])]
+    else:
+        misspelled['user_label'] = [user_names[name] for _ in range(misspelled.shape[0])]
+
     return misspelled
 
 
 @log_info
-def load_data(files_directory: str, columns: list) -> pd.DataFrame:
+def load_data(files_directory: str, columns: list, verbose_mode: bool= False) -> pd.DataFrame:
     df = pd.DataFrame()
     for file in os.listdir(files_directory):
+        print(file)
         if file[-4:] == 'json':
-            df = pd.concat([df, get_misspelled_words_df_from_json(os.path.normpath(os.path.join(files_directory, file)),
+            print(file)
+            df = pd.concat([df, get_misspelled_words_df_from_json(os.path.normpath(os.path.join(files_directory, file)), verbose_mode=verbose_mode,
                                                                   columns=columns)], ignore_index=True)
 
     # drop None (clear data)
@@ -135,17 +150,6 @@ def create_labeled_test_and_train_buckets(data_frame: pd.DataFrame, test_bucket_
     return train_test_split(data_frame.iloc[:, :-1], data_frame.iloc[:, -1], test_size=test_bucket_size, random_state=42)
 
 
-    # if isinstance(test_bucket_size, float) and test_bucket_size > 0.0:
-    #     train_bucket = data_frame.sample(frac=1 - test_bucket_size, random_state=42)
-    #     test_bucket = data_frame.drop(train_bucket.index)
-    #     return (train_bucket.iloc[:, :list(data_frame.columns).index(label_col_name)],  # X_train
-    #             train_bucket.iloc[:, list(data_frame.columns).index(label_col_name):],  # Y_train
-    #             test_bucket.iloc[:, :list(data_frame.columns).index(label_col_name)],  # X_test
-    #             test_bucket.iloc[:, list(data_frame.columns).index(label_col_name):])  # Y_test
-    # return (data_frame.iloc[:, :list(data_frame.columns).index(label_col_name)],  # X_train
-    #         data_frame.iloc[:, list(data_frame.columns).index(label_col_name):])  # Y_train
-
-
 @log_info
 def scale_data(X_train, X_test=None, scaler = StandardScaler()):
     scaler = scaler.fit(X_train)
@@ -155,30 +159,6 @@ def scale_data(X_train, X_test=None, scaler = StandardScaler()):
         return X_train, X_test
     else:
         return X_train
-
-
-# @log_info
-# def _create_an_user_ngram(list_of_an_user_word_representation: pd.DataFrame, amount_of_ngrams: int, n: int) -> np.array:
-#     """ Function that create n-grams for a label (user). """
-#     try:
-#         # create array of randomm permutations with fixed length (2* amount_of_ngrams) to randomly
-#         # choose amount_of_ngrams items.
-#         n_grams_idxs = random.sample(list((islice(permutations(range(len(list_of_an_user_word_representation)), n),
-#                                                   2 * amount_of_ngrams))), amount_of_ngrams)
-#
-#     # in case amount_of_ngrams is too high (amount_of_ngrams > len(permutations) assign each item.
-#     except ValueError as ver:
-#         logger.exception(f'During creating n-grams -> {ver.args}.')
-#
-#         # n_grams_idxs = list(
-#         #     (islice(permutations(range(len(list_of_an_user_word_representation)), n), 1.5*amount_of_ngrams)))
-#         n_grams_idxs = permutations(range(len(list_of_an_user_word_representation)), n)
-#     sequence = (0, 1)
-#
-#     # Count how many tuples start with the sequence
-#     print(sum(1 for t in n_grams_idxs if t[:len(sequence)] == sequence))
-#     return np.array(
-#         [np.take(list_of_an_user_word_representation, idx, axis=0).to_numpy().flatten() for idx in n_grams_idxs])
 
 
 @log_info

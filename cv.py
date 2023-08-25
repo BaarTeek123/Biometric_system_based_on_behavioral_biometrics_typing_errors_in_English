@@ -26,69 +26,65 @@ def calculate_metrics(y_valid, y_pred, threshold, name="" ,**kwargs):
     return {'clf': name, 'accuracy': acc, 'f1': f1, 'precision': precision, 'recall': recall,
          'threshold': threshold, **kwargs}
 
-def binarize_labels(y):
-    lb = LabelBinarizer()
-    return lb.fit_transform(y), lb
+# def run_cv(clf, params, X, y, X_valid, y_valid, n_splits=5, n_repeats=2 ,predef_model=False, name='',
+#            plot_path='results_identification/', is_multiclass=True):
+#     # Initialize RepeatedStratifiedKFold
+#     rskf = RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=42)
+#     results = []
+#
+#     for i, (train_index, test_index) in enumerate(rskf.split(X, y), 1):
+#         # Select training set for this fold
+#         X_train, y_train = X[train_index], y[train_index]
+#         X_test, y_test = X[test_index], y[test_index]
+#         if not predef_model:
+#             # Create a fresh clone of the classifier for this repeat
+#             clf_clone = clone(clf)
+#             # Tune hyperparameters on the current fold
+#             random_search = RandomizedSearchCV(clf_clone, params, n_jobs=-1, cv=3)
+#             random_search.fit(X_train, y_train)
+#             best_clf = random_search.best_estimator_
+#
+#         else:
+#             # Use the predefined model
+#             best_clf = clone(clf)
+#             best_clf.fit(X_train, y_train)
+#         best_clf.fit(X_test, y_test)
+#         # Calculate probabilities on the validation set
+#         y_pred = best_clf.predict_proba(X_valid)
+#         threshold = 0.02
+#
+#         for k in range(2, 51):
+#             y_pred = (y_pred >= threshold) * y_pred
+#             non_zero_mask = ~(np.all(y_pred == 0, axis=1))
+#             rejected = y_pred[~non_zero_mask].shape[0] / y_pred.shape[0]
+#             threshold = 0.02 * k
+#             if is_multiclass:
+#                 cmc = calculate_cmc(y_valid, np.array(y_pred))
+#                 print(cmc)
+#                 if i % 10 == 0:
+#                     plot_cmc(cmc, file_path=f'{plot_path}/{name}_{i}_{k}_cmc.png',
+#                              plot_title="Cumulative Match Characteristic (CMC) Curve")
+#             y_pred_labels = np.array([np.argmax(p) if np.max(p) > threshold else -1 for p in y_pred])
+#             if is_multiclass:
+#                 results.append(calculate_metrics(y_valid, y_pred_labels, threshold, name, cmc=cmc, rejected=rejected))
+#             else:
+#                 results.append(calculate_metrics(y_valid, y_pred_labels, threshold, name,  rejected=rejected))
+#
+#
+#         print(pd.DataFrame(results))
+#     return pd.DataFrame(results)
+#
+#
+#
 
 
-def prepare_splits(X, y, X_test=None, y_test=None, n_splits=5, n_repeats=2):
-    if X_test is None or y_test is None:
-        rskf = RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=42)
-        return list(rskf.split(X, y))
-    else:
-        return [
-            [sample(range(len(X)), int(0.9 * len(X))),
-             sample(range(len(X_test)), int(0.9 * len(X_test)))]
-            for _ in range(int(n_splits * n_repeats))
-        ]
+from sklearn.base import clone
+from sklearn.model_selection import RepeatedStratifiedKFold, RandomizedSearchCV
+import numpy as np
+import pandas as pd
 
 
-def initialize_model(X, is_multiclass, user_names):
-    if is_multiclass:
-        return create_neural_network(input_dim=X.shape[1], output_dim=len(user_names.keys()), binary=False)
-    else:
-        return create_neural_network(input_dim=X.shape[1], output_dim=len(user_names.keys()), binary=True)
-
-
-def train_and_evaluate_model(X, y, splits, y_binarized, lb, prototype_model, epochs=50, is_multiclass=True,
-                             plot_path='results_identification/random/'):
-    results = []
-
-    for k, (train_index, test_index) in enumerate(splits, 1):
-        X_train, X_val, y_train, y_val = split_data(X, y_binarized, train_index, test_index)
-
-        clf = clone_model(prototype_model)
-        clf.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-        history = clf.fit(expand_dims(X_train, axis=-1), y_train, epochs=epochs, batch_size=128,
-                          callbacks=[earlystopping, logger])
-
-        plot_and_evaluate(X_val, y_val, clf, lb, is_multiclass, plot_path, k, results)
-
-    return pd.DataFrame(results)
-
-
-def split_data(X, y_binarized, train_index, test_index):
-    X_train, X_val = X[train_index], X[test_index]
-    y_train, y_val = y_binarized[train_index], y_binarized[test_index]
-    return X_train, X_val, y_train, y_val
-
-
-def plot_and_evaluate(X_val, y_val, clf, lb, is_multiclass, plot_path, k, results):
-    # This function will handle plotting and evaluating the model. Due to the length constraint, I'm providing a concise version.
-    # Implement this function by extracting the relevant parts from the given function.
-    pass
-
-
-def run_cv_neural_network(X, y, X_test=None, y_test=None, n_splits=5, n_repeats=2,
-                          plot_path='results_identification/random/', epochs=50, is_multiclass=True):
-    y_binarized, lb = binarize_labels(y)
-    splits = prepare_splits(X, y, X_test, y_test, n_splits, n_repeats)
-    prototype_model = initialize_model(X, is_multiclass, user_names)
-    return train_and_evaluate_model(X, y, splits, y_binarized, lb, prototype_model, epochs, is_multiclass, plot_path)
-
-
-"""
-def run_cv(clf, params, X, y, X_valid, y_valid, n_splits=5, n_repeats=2 ,predef_model=False, name='',
+def run_cv(clf, params, X, y, X_valid, y_valid, n_splits=5, n_repeats=2, predef_model=False, name='',
            plot_path='results_identification/', is_multiclass=True):
     # Initialize RepeatedStratifiedKFold
     rskf = RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=42)
@@ -98,6 +94,7 @@ def run_cv(clf, params, X, y, X_valid, y_valid, n_splits=5, n_repeats=2 ,predef_
         # Select training set for this fold
         X_train, y_train = X[train_index], y[train_index]
         X_test, y_test = X[test_index], y[test_index]
+
         if not predef_model:
             # Create a fresh clone of the classifier for this repeat
             clf_clone = clone(clf)
@@ -105,14 +102,20 @@ def run_cv(clf, params, X, y, X_valid, y_valid, n_splits=5, n_repeats=2 ,predef_
             random_search = RandomizedSearchCV(clf_clone, params, n_jobs=-1, cv=3)
             random_search.fit(X_train, y_train)
             best_clf = random_search.best_estimator_
-
         else:
             # Use the predefined model
             best_clf = clone(clf)
             best_clf.fit(X_train, y_train)
+
         best_clf.fit(X_test, y_test)
-        # Calculate probabilities on the validation set
-        y_pred = best_clf.predict_proba(X_valid)
+
+        # Check if the classifier supports predict_proba
+        if hasattr(best_clf, "predict_proba"):
+            y_pred = best_clf.predict_proba(X_valid)
+        else:
+            y_pred = best_clf.predict(X_valid)
+            y_pred = np.eye(y_pred.max() + 1)[y_pred]  # Convert labels to one-hot encoded format
+
         threshold = 0.02
 
         for k in range(2, 51):
@@ -120,23 +123,23 @@ def run_cv(clf, params, X, y, X_valid, y_valid, n_splits=5, n_repeats=2 ,predef_
             non_zero_mask = ~(np.all(y_pred == 0, axis=1))
             rejected = y_pred[~non_zero_mask].shape[0] / y_pred.shape[0]
             threshold = 0.02 * k
+
             if is_multiclass:
                 cmc = calculate_cmc(y_valid, np.array(y_pred))
                 print(cmc)
                 if i % 10 == 0:
                     plot_cmc(cmc, file_path=f'{plot_path}/{name}_{i}_{k}_cmc.png',
                              plot_title="Cumulative Match Characteristic (CMC) Curve")
+
             y_pred_labels = np.array([np.argmax(p) if np.max(p) > threshold else -1 for p in y_pred])
+
             if is_multiclass:
                 results.append(calculate_metrics(y_valid, y_pred_labels, threshold, name, cmc=cmc, rejected=rejected))
             else:
-                results.append(calculate_metrics(y_valid, y_pred_labels, threshold, name,  rejected=rejected))
-
+                results.append(calculate_metrics(y_valid, y_pred_labels, threshold, name, rejected=rejected))
 
         print(pd.DataFrame(results))
     return pd.DataFrame(results)
-
-
 
 
 def run_cv_neural_network(X, y, X_test=None, y_test=None, n_splits: int=5, n_repeats: int=2, plot_path: str = 'results_identification/random/', epochs=50,
@@ -220,6 +223,3 @@ def run_cv_neural_network(X, y, X_test=None, y_test=None, n_splits: int=5, n_rep
 
     return pd.DataFrame(results)
 
-
-
-"""

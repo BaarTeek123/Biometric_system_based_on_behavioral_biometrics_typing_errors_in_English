@@ -10,16 +10,17 @@ import os.path, system_features_extractor
 from PyPDF2 import PdfFileReader
 from docx import Document
 
+
 class Combinations:
     """A class which includes key combinations or sets of keys."""
     END_KEYS = [keyboard.Key.esc, keyboard.Key.f4]  # key combination to finish listening
     NEXT_WORD_KEYS = [keyboard.Key.space, ':', ",", "/", '"']  # key of next words
     NEW_CONTEXT_KEYS = [keyboard.Key.down, keyboard.Key.up]  # , keyboard.Key.dot},
     SENTENCE_END_KEYS = [keyboard.Key.enter, ".", ";", '?', '!']
-    NUMPAD_NUMBERS_KEYS = [keyboard.Key.n_zero, keyboard.Key.n_one, keyboard.Key.n_two,
-                           keyboard.Key.n_three, keyboard.Key.n_four,
-                           keyboard.Key.n_five, keyboard.Key.n_six, keyboard.Key.n_seven,
-                           keyboard.Key.n_eight, keyboard.Key.n_nine]
+    # NUMPAD_NUMBERS_KEYS = [keyboard.Key.n_zero, keyboard.Key.n_one, keyboard.Key.n_two,
+    #                        keyboard.Key.n_three, keyboard.Key.n_four,
+    #                        keyboard.Key.n_five, keyboard.Key.n_six, keyboard.Key.n_seven,
+    #                        keyboard.Key.n_eight, keyboard.Key.n_nine]
 
 class RealTimeKeyListener:
     __left_button_mouse_is_pressed = False
@@ -31,7 +32,7 @@ class RealTimeKeyListener:
     __non_printable_counter = {}
     __non_printable_digraphs = []
     __pressed_keys = []
-    destination_json_file_path = "C:/Users/user/Desktop/destination_file.json"
+    destination_json_file_path = os.path.join(os.getcwd(), 'destination_file.json')
     keyboard_listener = None
     mouse_listener = None
 
@@ -76,7 +77,8 @@ class RealTimeKeyListener:
             self.__position += 1
 
         elif (hasattr(key, 'char') and key.char is not None and len(key.char) < 2) or (
-                key in Combinations.NUMPAD_NUMBERS_KEYS or key == keyboard.Key.space):
+                key in # Combinations.NUMPAD_NUMBERS_KEYS or
+                key == keyboard.Key.space):
             self.__insert_key(key)
         self.__previous_key = key
         self.__left_button_mouse_is_pressed = False
@@ -131,15 +133,15 @@ class RealTimeKeyListener:
             self.__keys_counter[str(click)] = 1
         else:
             self.__keys_counter[str(click)] += 1
-        self.__record_non_printable_digraphs_keys(click)
+        # self.__record_non_printable_digraphs_keys(click)
         self.__pressed_keys.append(str(click))
 
-    def __record_non_printable_digraphs_keys(self, click):
-        if (isinstance(click, keyboard.Key) and click not in Combinations.NUMPAD_NUMBERS_KEYS and self.__pressed_keys is not None) or (isinstance(self.__previous_key, keyboard.Key) and click not in Combinations.NUMPAD_NUMBERS_KEYS):
-            self.__non_printable_digraphs.append([str(self.__previous_key), str(click)])
+    # def __record_non_printable_digraphs_keys(self, click):
+    #     if (isinstance(click, keyboard.Key) and click not in Combinations.NUMPAD_NUMBERS_KEYS and self.__pressed_keys is not None) or (isinstance(self.__previous_key, keyboard.Key) and click not in Combinations.NUMPAD_NUMBERS_KEYS):
+    #         self.__non_printable_digraphs.append([str(self.__previous_key), str(click)])
 
     def __count_no_printable_keys(self, click):
-        if isinstance(click, keyboard.Key) and click not in Combinations.NUMPAD_NUMBERS_KEYS:
+        if isinstance(click, keyboard.Key):# and click not in Combinations.NUMPAD_NUMBERS_KEYS:
             if str(click) not in self.__non_printable_counter.keys():
                 self.__non_printable_counter[str(click)] = 1
             else:
@@ -164,7 +166,8 @@ class RealTimeKeyListener:
         char = ''
         if hasattr(key, 'char') and key.char is not None and len(key.char) < 2:
             char = key.char
-        elif key in Combinations.NUMPAD_NUMBERS_KEYS or key == keyboard.Key.space:
+        elif (key in #Combinations.NUMPAD_NUMBERS_KEYS or
+              key == keyboard.Key.space):
             char = key._value_.char
         if char is not None and char.isprintable():
             if self.__position == 0:
@@ -177,8 +180,8 @@ class OfflineListener:
     """ A class which should be used for 'offline' files. """
     # tokenizer to separate new context (mostly sentences)
     __sentence_tokenizer = RegexpTokenizer('[.;!?\n]', gaps=True)
-    destination_json_file_path = "C:/Users/user/Desktop/destination_file.json"
-    source_txt_file_path = "C:/Users/user/Desktop/destination_file.json"
+    destination_json_file_path = os.path.join(os.getcwd(), 'destination_file.json')
+    source_txt_file_path = None
     file_types = ['txt', 'pdf', 'docx']
 
     def read_text_file(self) -> str:

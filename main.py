@@ -6,7 +6,7 @@ from sklearn.neural_network import MLPClassifier
 from os import path, makedirs
 from create_model import create_dataset, NUMBER_OF_FEATURES, N_GRAM_SIZE
 from sklearn.svm import SVC
-from cv import run_cv, run_cv_neural_network
+from cv import run_cv_neural_network, run_cv
 
 
 
@@ -15,27 +15,29 @@ from cv import run_cv, run_cv_neural_network
 if __name__ == '__main__':
 
         CLASSIFIERS = [
+            (GradientBoostingClassifier(), param_grid['Gradient Boosting'], 'Gradient Boosting'),
+
             (RandomForestClassifier(), param_grid['Random Forest'], 'Random Forest'),
 
             (KNeighborsClassifier(), param_grid['K-Nearest Neighbors'], 'K-Nearest Neighbors'),
             (SVC(probability=True), param_grid['SVC'], 'SVC'),
 
-            (GradientBoostingClassifier(), param_grid['Gradient Boosting'], 'Gradient Boosting'),
 
             (MLPClassifier(), param_grid['MLP Classifier'], 'MLP Classifier'),
         ]
         results = []
-        X, y, X_test, y_test, cols = create_dataset(if_separate_words=True, test_ratio=0.5, verbose_mode=True, scaler=StandardScaler())
+        X, y, X_test, y_test = create_dataset(amount_of_n_grams_pers_user=5, if_separate_words=True, test_ratio=0.5, scaler=Normalizer(),
+                                                    number_of_features=5, n_gram_size=2)
         PLOT_PATH = f'plots/{N_GRAM_SIZE}_{NUMBER_OF_FEATURES}/'
         if not path.exists(PLOT_PATH):
             makedirs(PLOT_PATH)
 
 
-        res = run_cv_neural_network(X, y, X_test, y_test, epochs=5, plot_path=PLOT_PATH)
-        res['number of features'] = NUMBER_OF_FEATURES
-        res['ngram size'] = N_GRAM_SIZE
-        res['columns'] = str(cols)
-        res.to_csv('results_identification/nn.csv', mode='a+')
+        # res = run_cv_neural_network(X, y, X_test, y_test, epochs=50, plot_path=PLOT_PATH)
+        # res['number of features'] = NUMBER_OF_FEATURES
+        # res['ngram size'] = N_GRAM_SIZE
+        # res['columns'] = str(cols)
+        # res.to_csv('results_identification/nn.csv', mode='a+')
 
         for clf in CLASSIFIERS:
             if clf[1] is not None:
@@ -45,7 +47,7 @@ if __name__ == '__main__':
 
             res['number of features'] = NUMBER_OF_FEATURES
             res['ngram size'] = N_GRAM_SIZE
-            res['columns'] = str(cols)
+            # res['columns'] = str(cols)
             res.to_csv(f'results_identification/{clf[2]}.csv', mode='a+')
 
 '''

@@ -9,8 +9,8 @@ from keras.metrics import TruePositives, TrueNegatives, FalseNegatives, FalsePos
 def calculate_cmc(y_test, probs, threshold=0.0):
     sorted_indices = np.argsort(-probs, axis=1)
 
-    # Initialize ranks array with a value out of the normal rank range (e.g., 9 for an 8 class problem)
-    ranks = np.full(y_test.shape, 9)
+    # Initialize ranks array with a value out of the normal rank range (e.g., n+1 for an 8 class problem)
+    ranks = np.full(y_test.shape, len(np.unique(y_test))+1)
 
     for i in range(8):  # adjust this based on the number of classes or columns in your probs array
         # Find indices where the true label matches the sorted index and the probability is above the threshold
@@ -18,7 +18,7 @@ def calculate_cmc(y_test, probs, threshold=0.0):
         ranks[mask] = i
 
     # Compute CMC curve
-    cmc_counts = np.bincount(ranks, minlength=9)[:8]
+    cmc_counts = np.bincount(ranks, minlength=9)[:len(np.unique(y_test))]
     return np.cumsum(cmc_counts) / len(y_test)
 
 
@@ -31,7 +31,7 @@ def plot_cmc(cmc_curve, plot_title="Cumulative Match Characteristic (CMC) Curve"
     plt.title(plot_title, fontsize=14, fontweight='bold')
     plt.xlabel("Rank", fontsize=14)
     plt.ylabel("Recognition Rate", fontsize=14)
-    plt.xticks(np.arange(0, 8, 1))  # Adjust according to your dataset's number of classes
+    plt.xticks(np.arange(0, len(cmc_curve), 1))  # Adjust according to your dataset's number of classes
     plt.yticks(np.arange(0, 1.1, 0.1))
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.tight_layout()
