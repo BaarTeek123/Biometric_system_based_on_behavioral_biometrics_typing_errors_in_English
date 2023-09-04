@@ -4,7 +4,7 @@ from itertools import cycle
 import matplotlib.pyplot as plt
 import numpy as np
 from keras.metrics import TruePositives, TrueNegatives, FalseNegatives, FalsePositives
-
+import seaborn as sns
 
 def calculate_cmc(y_test, probs, threshold=0.0):
     sorted_indices = np.argsort(-probs, axis=1)
@@ -12,7 +12,7 @@ def calculate_cmc(y_test, probs, threshold=0.0):
     # Initialize ranks array with a value out of the normal rank range (e.g., n+1 for an 8 class problem)
     ranks = np.full(y_test.shape, len(np.unique(y_test))+1)
 
-    for i in range(8):  # adjust this based on the number of classes or columns in your probs array
+    for i in range(len(np.unique(y_test))):
         # Find indices where the true label matches the sorted index and the probability is above the threshold
         mask = (sorted_indices[:, i] == y_test) & (probs[np.arange(probs.shape[0]), sorted_indices[:, i]] >= threshold)
         ranks[mask] = i
@@ -176,15 +176,29 @@ def get_info_readme(list_of_features: list, columns: list):
     return infos
 
 # draw confusion matrix
-def plot_confusion_metrics(y_test, y_pred, labels: list, display_labels: list, file_path=None):
-    system_confusion_matrix = confusion_matrix(np.argmax(y_test, axis=1), np.argmax(y_pred, axis=1),
-                                               labels=labels)
-    cm_display = ConfusionMatrixDisplay(system_confusion_matrix, display_labels=display_labels)
-    fig, ax = plt.subplots(figsize=(10, 10))
-    cm_display.plot(cmap="RdYlGn", ax=ax)
+def plot_confusion_metrics(y_test, y_pred, display_labels: list=None, file_path=None):
+    # system_confusion_matrix = confusion_matrix(np.argmax(y_test, axis=1), np.argmax(y_pred, axis=1),
+    #                                            labels=labels)
+    # cm_display = ConfusionMatrixDisplay(system_confusion_matrix, display_labels=display_labels)
+    # fig, ax = plt.subplots(figsize=(10, 10))
+    # cm_display.plot(cmap="RdYlGn", ax=ax)
+    # if file_path is not None:
+    #     plt.savefig(file_path)
+    # plt.show()
+    cm = confusion_matrix(y_test, np.argmax(y_pred, axis=1))
+    if display_labels is None:
+        display_labels = np.unique(y_test)
+
+    plt.figure(figsize=(18, 16))
+    sns.heatmap(cm, annot=True, fmt='g', cmap='RdYlGn', xticklabels=display_labels, yticklabels=display_labels)
+    plt.xlabel('Predicted labels')
+    plt.ylabel('True labels')
+    plt.title('Confusion Matrix')
     if file_path is not None:
         plt.savefig(file_path)
     plt.show()
+
+
 
 # get fp, tp, fn, tn
 def hipotese_tests(true_y, pred_y):
@@ -206,7 +220,7 @@ def hipotese_tests(true_y, pred_y):
 
     return tn, fp, fn, tp
 
-# get eer
+
 def find_eer(far, frr):
     x = np.absolute((np.array(far) - np.array(frr)))
 
@@ -215,6 +229,67 @@ def find_eer(far, frr):
     far_optimum = far[y]
     frr_optimum = frr[y]
     return [np.nanargmin(x), max(far_optimum, frr_optimum)]
+
+"""
+
+
+def draw_far_frr(far, frr, eer, thresholds, plot_title=None, file_path=None):
+    fig = plt.figure()
+    ax = plt.subplot(111)
+    ax.plot(thresholds, far, color='pink', label='FAR (False Acceptance Rate)', linewidth=2)
+    ax.plot(thresholds, frr, color='steelblue', label='FRR (False Rejection Rate)', linewidth=2)
+    plt.xlabel('Threshold')
+    plt.ylabel('Percentage of tries')
+
+    # Find the threshold where the difference between FAR and FRR is the smallest
+    diffs = np.abs(np.array(far) - np.array(frr))
+    min_index = np.argmin(diffs)
+
+    plt.scatter(thresholds[min_index], eer, color='red', s=100, zorder=5)
+    plt.annotate(f'EER: {eer:.4f}', (thresholds[min_index], eer), textcoords="offset points",
+                 xytext=(0, 10), ha='center')
+
+    ax.legend(bbox_to_anchor=(1, 0), loc="lower right",
+              bbox_transform=fig.transFigure, ncol=3, fontsize=8)
+    if plot_title is not None:
+        ax.set_title(plot_title)
+    if file_path is not None:
+        plt.savefig(file_path)
+    plt.show()
+
+
+# get eer
+def calculate_far_frr_eer(y_test, y_pred, bins=100):
+    thresholds = np.linspace(0, 1, bins)
+    far_values = []
+    frr_values = []
+
+    for threshold in thresholds:
+        # Classify predictions
+        positive_preds = y_pred >= threshold
+        negative_preds = y_pred < threshold
+
+        # Calculate false accepts and false rejects
+        false_accepts = np.sum((y_test == 0) & (positive_preds))
+        false_rejects = np.sum((y_test == 1) & (negative_preds))
+
+        # Calculate total impostor and genuine attempts
+        total_impostor_attempts = np.sum(y_test == 0)
+        total_genuine_attempts = np.sum(y_test == 1)
+
+        # Calculate FAR and FRR
+        far = false_accepts / total_impostor_attempts
+        frr = false_rejects / total_genuine_attempts
+
+        far_values.append(far)
+        frr_values.append(frr)
+
+    diffs = np.abs(np.array(far_values) - np.array(frr_values))
+    min_index = np.argmin(diffs)
+
+    # The EER is approximately the average of FAR and FRR at this threshold
+    return far_values, frr_values, find_eer(far_values, frr_values), thresholds
+"""
 
 # calculate far, frr, eer
 def calculate_far_frr_eer(y_test, y_pred, bins=100):
@@ -234,6 +309,10 @@ def calculate_far_frr_eer(y_test, y_pred, bins=100):
     eer[0] = eer[0] / bins
     return far, frr, eer, threshold
 
+
+
+
+
 # draw far, frr with eer
 def draw_far_frr(far, frr, eer, threshold, plot_title=None, file_path=None):
     fig = plt.figure()
@@ -251,6 +330,11 @@ def draw_far_frr(far, frr, eer, threshold, plot_title=None, file_path=None):
     if file_path is not None:
         plt.savefig(file_path)
     plt.show()
+
+
+
+
+
 
 # draw roc curve
 def draw_system_t_roc_curve(far, frr, eer, plot_title=None, file_path=None):
@@ -270,18 +354,21 @@ def draw_system_t_roc_curve(far, frr, eer, plot_title=None, file_path=None):
 def draw_system_roc_curve(far, frr, eer, plot_title=None, file_path=None):
     plt.figure()
     tpr = 1 - np.array(frr)
-    plt.plot(np.append(far, 0.0), np.append(tpr, 0.0), color='steelblue', linewidth=2)
+    plt.plot( np.sort(np.concatenate([far, [0.0, 1.0]])), np.sort(np.concatenate([tpr, [0.0, 1.0]])), color='steelblue', linewidth=2)
+
     plt.plot(far, far, color='grey', linestyle='dashed')
     plt.ylabel('True Positive Rate')
     plt.xlabel('False Positive Rate')
     plt.plot(eer[1], 1.0 - eer[1], color='red', marker='o', label='EER')
+    plt.plot([0, 1], [0, 1], "k--", lw=2)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
     plt.text(eer[1], 1.0 - eer[1], '  EER (Equal Error Rate)', fontdict={'size': 7})
     if plot_title is not None:
         plt.title(plot_title)
     if file_path is not None:
         plt.savefig(file_path)
-    else:
-        plt.show()
+    plt.show()
 
 
 def save_to_csv(file_path: str, my_dict: dict):
@@ -290,3 +377,4 @@ def save_to_csv(file_path: str, my_dict: dict):
         if file.tell() == 0:
             w.writeheader()
         w.writerow(my_dict)
+

@@ -152,7 +152,7 @@ if __name__ == '__main__':
         text_color = "#ECF0F1"
 
         root = tk.Tk()
-        root.geometry('800x600')
+        root.geometry('800x900')
         root.resizable(True, True)
         root.title(title)
         root.configure(background=background)

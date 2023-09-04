@@ -29,7 +29,5 @@ def get_file_handler(log_file: str, formattter):
 
 # Add handlers to the logger
 # logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG, handlers=[get_console_handler(FORMATTER), get_file_handler(LOG_FILE, FORMATTER)])
+logging.basicConfig(level=logging.INFO, handlers=[get_console_handler(FORMATTER), get_file_handler(LOG_FILE, FORMATTER)])
 logger = logging.getLogger(__name__)
-
-print("Num GPUs Available: ", len(tensorflow.config.list_physical_devices('GPU')))
