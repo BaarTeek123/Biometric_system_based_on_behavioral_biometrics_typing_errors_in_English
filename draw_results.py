@@ -6,6 +6,81 @@ import numpy as np
 from keras.metrics import TruePositives, TrueNegatives, FalseNegatives, FalsePositives
 import seaborn as sns
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+from os.path import isdir, join
+
+
+def plot_curves_and_matrix(all_far, all_tpr, all_eer, all_frr, thresholds, cumulative_cm, title=None, plot_path='.'):
+    """
+    Plots ROC curves, T-ROC curve, and a confusion matrix.
+
+    Parameters:
+    - all_far: List of False Acceptance Rates for each fold
+    - all_tpr: List of True Positive Rates for each fold
+    - all_eer: List of Equal Error Rates for each fold
+    - all_frr: List of False Rejection Rates for each fold
+    - thresholds: List of thresholds for each fold
+    - cumulative_cm: Cumulative confusion matrix
+    - title: Title for the saved plot (optional)
+    - plot_path: Path to save the plot (optional, default is current directory)
+
+    Returns:
+    - None
+    """
+
+    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+
+    # Plot ROC Curves
+    for i, (far, tpr) in enumerate(zip(all_far, all_tpr)):
+        ax[0].plot(far, tpr, lw=1, alpha=0.3, label=f'Fold {i + 1} (EER = {all_eer[i]:.2f})')
+    ax[0].set_xlabel('False Positive Rate')
+    ax[0].set_ylabel('True Positive Rate')
+    ax[0].set_title('ROC Curves')
+    ax[0].legend(loc='lower right')
+
+    # Colors for T-ROC Curve
+    t_roc_colors = ['blue', 'yellow', 'purple', 'cyan', 'magenta', 'orange', 'brown', 'pink', 'lime', 'gray']
+
+    # Plot T-ROC Curve
+    for i, (far, frr, thresh) in enumerate(zip(all_far, all_frr, thresholds)):
+        color = t_roc_colors[i % len(t_roc_colors)]
+        ax[1].plot(frr, thresh, color=color, linewidth=1)
+        ax[1].plot(far, thresh, color=color, linewidth=1, label=f'FRR & FAR Fold {i + 1} (EER = {all_eer[i]:.2f})')
+        # ax[1].plot(frr, thresh, color=color, linewidth=1,
+        # ax[1].plot(far, thresh, color=color, linewidth=1)
+    ax[1].set_title('')
+    ax[1].set_xlabel('Threshold')
+    ax[1].set_ylabel('Errors ratio')
+    ax[1].legend(loc='best', fontsize='small')
+    ax[1].set_xlim(0, 1)
+    ax[1].set_ylim(0, 1)
+    max_val = cumulative_cm.max().max()
+    cmap = sns.diverging_palette(10, 130, l=60, n=150, center="light", as_cmap=True)
+
+    # Plot Confusion Matrix
+    sns.heatmap(cumulative_cm, annot=True, fmt='g', cmap=cmap, center=max_val / 2, xticklabels=['Other user', 'User'],
+                yticklabels=['Other user', 'User'], ax=ax[2])
+    ax[2].set_title('Confusion Matrix')
+    ax[2].set_xlabel('Predicted')
+    ax[2].set_ylabel('Actual')
+    plt.tight_layout()
+
+    # Save the plot if title is provided
+    if title is not None:
+        if not isdir(plot_path):
+            os.mkdir(plot_path)
+        plt.savefig(join(plot_path, title + '.png'))
+
+    # Display the plot
+    plt.show()
+
+
+# Example usage:
+# plot_curves_and_matrix(all_far, all_tpr, all_eer, all_frr, thresholds, cumulative_cm, title="My
+
+
 def calculate_cmc(y_test, probs, threshold=0.0):
     sorted_indices = np.argsort(-probs, axis=1)
 

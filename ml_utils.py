@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from decorators import log_info
-
+from mlxtend.evaluate import paired_ttest_5x2cv
 
 @log_info
 def compute_class_weights(y):

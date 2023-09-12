@@ -5,7 +5,8 @@ import os
 import tensorflow
 
 FORMATTER = logging.Formatter("%(asctime)s — %(name)s — %(levelname)s — %(message)s")
-LOG_FILE = os.path.normpath(os.path.join(os.getcwd(), "logs/logs.log"))
+# LOG_FILE = os.path.normpath(os.path.join(os.getcwd(), "logs/logs.log"))
+LOG_FILE = os.path.normpath(os.path.join(os.getcwd(), "/home/bartek/PycharmProjects/Biometric_system_based_on_behavioral_biometrics_typing_errors_in_English/logs/logs.log"))
 
 
 def get_console_handler(formattter):

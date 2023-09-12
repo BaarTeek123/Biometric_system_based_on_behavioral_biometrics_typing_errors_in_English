@@ -1,323 +1,311 @@
+import os
+from os.path import isdir, join
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import tensorflow as tf
-from sklearn.model_selection import KFold
-from sklearn.utils import resample, shuffle
-from sklearn.preprocessing import Normalizer
 import tensorflow_decision_forests as tfdf
+from imblearn.over_sampling import BorderlineSMOTE
+from imblearn.under_sampling import NearMiss
+from keras.metrics import AUC
 from sklearn.metrics import confusion_matrix
+from sklearn.metrics import roc_curve
+from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import Normalizer
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.utils import resample, shuffle
+from imblearn.ensemble import BalancedBaggingClassifier, BalancedRandomForestClassifier, RUSBoostClassifier
+from sklearn.base import BaseEstimator
+from keras.models import Model as TFModel
 
-from create_model import NUMBER_OF_FEATURES, N_GRAM_SIZE, create_dataset
+
+from create_model import create_dataset
 from cv import calculate_metrics
 from decorators import log_info
-from draw_results import calculate_far_frr_eer, draw_system_t_roc_curve, plot_cmc, draw_system_roc_curve, \
-    draw_classes_roc_curve, plot_confusion_metrics
+from draw_results import plot_curves_and_matrix
 # draw_system_t_roc_curve, draw_system_roc_curve
 from logger import logger
+
 
 def predict_input_fn(dataset):
     return dataset.map(lambda features, labels: features)
 
 @log_info
 def run_cv_tf(model, X, y, X_valid, y_valid, n_splits=5, name='',
-           plot_path='results_identification/', user_name = None, is_multiclass=True):
-
+              plot_path='results_identification/', title=None, use_weigted_dataset=False):
     kf = KFold(n_splits=n_splits)
     results = []
-
+    # Initialization
+    all_far = []
+    all_frr = []
+    all_tpr = []
+    all_eer = []
+    cumulative_cm = np.zeros((2, 2))
+    threshold = None
     for train_index, test_index in kf.split(X):
         # Create train and test datasets using the indices from KFold
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
         logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
-        train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train)).batch(1000)
-        test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test)).batch(1000)
-        valid_dataset = tf.data.Dataset.from_tensor_slices((X_valid, y_valid)).batch(1000)
+        if use_weigted_dataset:
+            unique_classes, class_counts = np.unique(y, return_counts=True)
+            class_weight_dict = dict(zip(unique_classes, len(y_train) / (len(unique_classes) * class_counts)))
+            sample_weights = np.array([class_weight_dict[class_val] for class_val in y_train])
+            train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train, sample_weights)).batch(1000)
+        else:
+            train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train)).batch(1000)
+
+        X_valid, no_use_x, y_valid, no_use_y = train_test_split(X_valid, y_valid, test_size=0.1)
+
         model.fit(train_dataset)
-        predictions = model.predict(X_valid, verbose=2)
+        model.compile(metrics=[AUC(name='auc')])
+
+        predictions = model.predict(X_valid)
+
         predictions = np.hstack((1 - predictions, predictions))
+        y_score = predictions[:, 1]
+        # Compute ROC curve metrics
+        far, tpr, threshold = roc_curve(y_valid, y_score)
+        frr = 1 - tpr
+        all_frr.append(frr)
+        all_far.append(far)
+        all_tpr.append(tpr)
+        # Compute EER
+        eer_index = np.nanargmin(np.absolute(far - frr))
+        eer = (far[eer_index] + frr[eer_index]) / 2
+        all_eer.append(eer)
+
         cm = confusion_matrix(y_valid, np.argmax(predictions, axis=1))
-        print(cm)
-        if user_name is None:
-                user_name = 'User'
-        plot_confusion_metrics(y_valid, predictions, ['No user', user_name])
-        far, frr, eer, threshold = calculate_far_frr_eer(y_valid, predictions)
+        cumulative_cm += cm
+        results.append(calculate_metrics(y_valid, np.argmax(predictions, axis=1), 0.5, name=model.__class__.__name__))
 
-        draw_system_roc_curve(far, frr, eer, plot_title="Receiver operating characteristic", file_path=f'{plot_path}/{name}_{NUMBER_OF_FEATURES}_{N_GRAM_SIZE}_far_frr.png')
-        draw_system_t_roc_curve(far, frr, eer, plot_title="T-Receiver operating characteristic",
-                                file_path=f'{plot_path}/{name}_{NUMBER_OF_FEATURES}_{N_GRAM_SIZE}_t_roc.png')
-        # draw_system_roc_curve(far, frr, eer, plot_title="Receiver operating characteristic ",
-        #                       file_path=f'{plot_path}/{name}_{NUMBER_OF_FEATURES}_{N_GRAM_SIZE}_roc.png')
+    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
 
+    for i, (far, tpr) in enumerate(zip(all_far, all_tpr)):
+        ax[0].plot(far, tpr, lw=1, alpha=0.3, label=f'Fold {i + 1} (EER = {all_eer[i]:.2f})')
+    ax[0].set_xlabel('False Positive Rate')
+    ax[0].set_ylabel('True Positive Rate')
+    ax[0].set_title('ROC Curves')
+    ax[0].legend(loc='lower right')
+
+    for i, (far, frr) in enumerate(zip(all_far, all_frr)):
+        ax[1].plot(frr, threshold, color='green', linewidth=2)
+        ax[1].plot(frr, threshold, color='gray', linewidth=2)
+        ax[1].set_title('T-ROC Curve')
+        ax[1].set_xlabel('FRR (False Rejection Rate)')
+        ax[1].set_ylabel('FAR (False Acceptance Rate)')
+
+    sns.heatmap(cumulative_cm, annot=True, fmt='g', cmap='Blues', xticklabels=['Other user', 'User'],
+                yticklabels=['Other user', 'User'], ax=ax[2])
+    ax[2].set_title('Confusion Matrix')
+    ax[2].set_xlabel('Predicted')
+    ax[2].set_ylabel('Actual')
+    plt.tight_layout()
+    if title is not None:
+        if not isdir(plot_path):
+            os.mkdir(plot_path)
+        plt.savefig(join(plot_path, title + '.png'))
+    plt.show()
+    return pd.DataFrame(results)
+    # return pd.DataFrame(results), all_far, all_frr, all_tpr, all_eer, cumulative_cm
+
+
+def run_cv_sklearn(model, X, y, X_valid, y_valid, n_splits=5, name='',
+                   plot_path='results_identification/', title=None, use_weigted_dataset=False):
+    kf = KFold(n_splits=n_splits)
+    results = []
+    all_far = []
+    all_frr = []
+    all_tpr = []
+    all_eer = []
+    cumulative_cm = np.zeros((2, 2))
+    thresholds = []
+    for train_index, test_index in kf.split(X):
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+
+        if use_weigted_dataset:
+            unique_classes, class_counts = np.unique(y, return_counts=True)
+            class_weight_dict = dict(zip(unique_classes, len(y_train) / (len(unique_classes) * class_counts)))
+            sample_weights = np.array([class_weight_dict[class_val] for class_val in y_train])
+            model.fit(X_train, y_train, sample_weight=sample_weights)
+        else:
+            model.fit(X_train, y_train)
+
+        predictions = model.predict_proba(X_valid)[:, 1]
+
+        # Compute ROC curve metrics
+        far, tpr, thresh= roc_curve(y_valid, predictions)
+        frr = 1 - tpr
+        all_frr.append(frr)
+        all_far.append(far)
+        all_tpr.append(tpr)
+        thresholds.append(thresh)
+
+        # Compute EER
+        eer_index = np.nanargmin(np.absolute(far - frr))
+        eer = (far[eer_index] + frr[eer_index]) / 2
+        all_eer.append(eer)
+        threshold = 0.5
+        cm = confusion_matrix(y_valid, (predictions >= threshold).astype(int))
+        cumulative_cm += cm
+        results.append(calculate_metrics(y_valid, (predictions >= threshold).astype(int), 0.5, model.__class__.__name__))
+    plot_curves_and_matrix(all_far, all_tpr, all_eer, all_frr, thresholds, cumulative_cm, title=title, plot_path=plot_path)
     return pd.DataFrame(results)
 
+
 """
-        # y_pred = model.predict_proba(valid_dataset)
-        threshold = 0.02
-        probabilities = []
-        for pred_dict in predictions:
-            prob = pred_dict['probabilities'][1]  # Probability for class 1
-            probabilities.append(prob)
-        for k in range(2, 51):
-            y_pred = (y_pred >= threshold) * y_pred
-            non_zero_mask = ~(np.all(y_pred == 0, axis=1))
-            rejected = y_pred[~non_zero_mask].shape[0] / y_pred.shape[0]
-            threshold = 0.02 * k
-
-            if is_multiclass:
-                cmc = calculate_cmc(y_valid, np.array(y_pred))
-                print(cmc)
-                plot_cmc(cmc, file_path=f'{plot_path}/{name}_{k}_cmc.png',
-                             plot_title="Cumulative Match Characteristic (CMC) Curve")
-
-            y_pred_labels = np.array([np.argmax(p) if np.max(p) > threshold else -1 for p in y_pred])
-
-            if is_multiclass:
-                results.append(calculate_metrics(y_valid, y_pred_labels, threshold, name, cmc=cmc, rejected=rejected))
-            else:
-                results.append(calculate_metrics(y_valid, y_pred_labels, threshold, name, rejected=rejected))
-"""
-
-
-
-
-def balance_dataset(X, y, user, random_state=42):
+def balance_dataset(X, y, user, ratio = 1.0, random_state=42):
     user_mask = (y == user)
     non_user_mask = (y != user)
 
     X_balanced = np.concatenate([X[user_mask],
                                  resample(X[non_user_mask],
-                                          n_samples=user_mask.sum(),
+                                          n_samples=int(user_mask.sum()//ratio),
                                           random_state=random_state)])
     y_balanced = np.concatenate([np.ones(user_mask.sum()),
-                                 np.zeros(user_mask.sum())])
+                                 np.zeros(X_balanced.shape[0] - user_mask.sum())])
+
     return shuffle(X_balanced, y_balanced, random_state=random_state)
 
-
 @log_info
-def train_and_evaluate_for_user(model, params, X_train, y_train, X_test, y_test, user):
-    X_balanced_train, y_balanced_train = balance_dataset(X_train, y_train, user)
+def train_and_evaluate_for_user(model, params, X_train, y_train, X_test, y_test, user, ratio=0.5, name:str= "", plot_path = 'results_verification/'):
+    X_balanced_train, y_balanced_train = balance_dataset(X_train, y_train, user, ratio)
     X_balanced_test, y_balanced_test = balance_dataset(X_test, y_test, user)
 
+    return run_cv_tf(model, X_balanced_train, y_balanced_train, X_balanced_test, y_balanced_test,
+                     plot_path=plot_path, is_multiclass=False, name=name, user_name=f'user {user}')
 
-    return run_cv_tf(model, X_balanced_train, y_balanced_train, X_balanced_test, y_balanced_test, plot_path='results_verification/', is_multiclass=False, name='GBDT', user_name=f'user {user}')
+"""
 
+
+def oversample_dataset(X, y, user_label, ratio=0.3):
+    """
+    Balance the dataset using BorderlineSMOTE.
+
+    Parameters:
+    - X: Features
+    - y: Labels
+    - user: The user for which the dataset needs to be balanced
+    - ratio: The desired ratio of minority to majority class after balancing
+
+    Returns:
+    - X_resampled: Resampled features
+    - y_resampled: Resampled labels
+    """
+    user_mask = (y == user_label)
+    non_user_mask = (y != user_label)
+    print(f"User label {user_label}")
+
+    num_of_non_user_samples = int(user_mask.sum()//ratio)
+    if  num_of_non_user_samples > (y != user_label).sum()//ratio:
+        num_of_non_user_samples =  int(0.8 * (y != user_label).sum())
+
+    # assign 1 to user, 0 to others
+    y = np.where(y == user_label, 1, 0)
+    sampling_strategy = {0: num_of_non_user_samples}
+
+    nearmiss = NearMiss(sampling_strategy=sampling_strategy)
+
+    X, y = nearmiss.fit_resample(X, y)
+
+    # X_balanced = np.concatenate([X[user_mask],
+    #                              resample(X[non_user_mask],
+    #                                       n_samples=int(user_mask.sum()//ratio),
+    #                                       random_state=random_state)])
+    # y_balanced = np.concatenate([np.ones(user_mask.sum()),
+    #                              np.zeros(X_balanced.shape[0] - user_mask.sum())])
+
+    # if not oversample:
+    #     return X_balanced, y_balanced
+
+    # Set the sampling strategy
+    # sampling_strategy = {1: int((len(y) - sum(user_mask)) * ratio / (1 - ratio))}
+    sampling_strategy = {1: num_of_non_user_samples}
+    smote = BorderlineSMOTE(sampling_strategy=sampling_strategy)
+    X, y = smote.fit_resample(X, y)
+
+    return X, y
+
+def balance_dataset(X, y, user_label, imbalance_ratio=0.3):
+    y_labels = (y == user_label).sum()
+    y = np.where(y == user_label, 1, 0)
+    logger.info(f'Created {(y == 1).sum()} from {y_labels}')
+    X_zero = X[y == 0]
+    y_zero = y[y == 0]
+    test_size = 1-((y == 1).sum() / (y == 0).sum())/imbalance_ratio
+    if test_size < 0.01:
+        test_size=0.01
+    X_train_zero, X_test_zero, y_train_zero, y_test_zero = train_test_split(X_zero, y_zero,
+                                                                            test_size=test_size)
+
+
+    # Merge the training data
+    return np.vstack((X_train_zero, X[y == 1])), np.hstack((y_train_zero, y[y == 1]))
+
+
+
+
+def train_and_evaluate_for_user(model, params, X_train, y_train, X_test, y_test, user, oversample,
+                                plot_path='results_verification/', title=None):
+    if oversample:
+        X_balanced_train, y_balanced_train = oversample_dataset(X_train, y_train, ratio=0.5, user_label=user,)
+    else:
+        X_balanced_train, y_balanced_train = balance_dataset(X_train, y_train, user_label=user)
+    X_balanced_test, y_balanced_test = balance_dataset(X_test, y_test, user_label=user)
+    common_args = {
+        'X': X_balanced_train,
+        # 'params': params,
+        'y': y_balanced_train,
+        'X_valid': X_balanced_test,
+        'y_valid': y_balanced_test,
+        'plot_path': plot_path,
+        'use_weigted_dataset': False,
+        'title': title
+    }
+    if isinstance(model, TFModel):
+        return run_cv_tf(model, **common_args)
+    elif isinstance(model, BaseEstimator):
+        return run_cv_sklearn(model, **common_args)
 
 
 if __name__ == '__main__':
-    X, y, X_test, y_test, cols = create_dataset(if_separate_words=True, test_ratio=0.5, verbose_mode=True,
-                                                scaler=Normalizer())
+    NUMBER_OF_FEATURES = 5
+    N_GRAM_SIZE = 2
+    OVERSAMPLE = False
+    X, y, X_test, y_test = create_dataset(if_separate_words=True, test_ratio=0.5, verbose_mode=False,
+                                                scaler=Normalizer(), n_gram_size=N_GRAM_SIZE, number_of_features=NUMBER_OF_FEATURES)
     model = tfdf.keras.GradientBoostedTreesModel(hyperparameter_template="benchmark_rank1",
                                                  task=tfdf.keras.Task.CLASSIFICATION,
                                                  # tuner=tuner,
                                                  l2_regularization=0.01)
+
     final_df_list = []
-    for user in np.unique(y):
-        final_df_list.append(train_and_evaluate_for_user(model, None, X, y, X_test, y_test, user))
-# import time
-# from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-# from sklearn.neighbors import KNeighborsClassifier
-# import pandas as pd
-# import classifiers
-# from classifiers import build_tuned_nn, build_tuned_rfc, param_grid
-# from sklearn.neural_network import MLPClassifier
-# from create_model import create_dataset
-# from sklearn.svm import SVC
-# from sklearn.utils import shuffle
-# import numpy as np
-# from sklearn.model_selection import train_test_split
-# from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, \
-#     classification_report
-# from sklearn.preprocessing import LabelBinarizer
-# from sklearn.utils import resample
-# import tensorflow_decision_forests as tfdf
-# import tensorflow as tf
-#
-# from draw_results import calculate_cmc
-#
-#
-#
-#
-#
-# if __name__ == "__main__":
-#
-#     CLASSIFIERS = [
-#         # (build_tuned_rfc,
-#         #  {'clf': RandomForestClassifier(), 'x_train': X_valid, 'y_train': y_valid, 'param_grid':
-#         (RandomForestClassifier(), param_grid['Random Forest'],
-#          'Random Forest'),
-#
-#         (KNeighborsClassifier(),
-#          param_grid['K-Nearest Neighbors'],
-#          'K-Nearest Neighbors'),
-#
-#         (SVC(probability=True),
-#          param_grid['SVC'],
-#          'SVC'),
-#
-#         (GradientBoostingClassifier(),
-#          param_grid['Gradient Boosting'],
-#          'Gradient Boosting'),
-#
-#         (MLPClassifier(),
-#          param_grid['MLP Classifier'],
-#          'MLP Classifier')
-# ]
-#
-#
-#     X_train, y_train, X_test, y_test = create_dataset(test_ratio=0.5, if_separate_words=True, n_gram_size=2, number_of_features=5, amount_of_n_grams_pers_user=3100, )
-#     history_dict = {}
-#     df_list = []
-#     for user in np.unique(y_train):
-#
-#         # Create balanced datasets for user and non-user
-#         user_mask_train = (y_train == user)
-#         non_user_mask_train = (y_train != user)
-#
-#         user_mask_test = (y_test == user)
-#         non_user_mask_test = (y_test != user)
-#
-#         # Concatenate user and non-user samples (equal numbers)
-#         X_balanced_train = np.concatenate([X_train[user_mask_train],
-#                                            resample(X_train[non_user_mask_train],
-#                                                     n_samples=user_mask_train.sum(),
-#                                                     random_state=42)])
-#
-#         y_balanced_train = np.concatenate([np.ones(user_mask_train.sum()),
-#                                            np.zeros(user_mask_train.sum())])  # 1 for user, 0 for non-user
-#
-#         X_balanced_test = np.concatenate([X_test[user_mask_test],
-#                                           resample(X_test[non_user_mask_test],
-#                                                    n_samples=user_mask_test.sum(),
-#                                                    random_state=42)])
-#
-#         y_balanced_test = np.concatenate([np.ones(user_mask_test.sum()),
-#                                           np.zeros(user_mask_test.sum())])  # 1 for user, 0 for non-user
-#
-#         # Shuffling the balanced train and test sets
-#         X_balanced_train, y_balanced_train = shuffle(X_balanced_train, y_balanced_train, random_state=42)
-#         X_balanced_test, y_balanced_test = shuffle(X_balanced_test, y_balanced_test, random_state=42)
-#
-#         # Create and compile the model
-#         # model = KerasNNClf(X_train.shape[1], len(user_names.keys()), True).create_neural_network()
-#         # model = classifiers.create_neural_network(X_train.shape[1], len(user_names.keys()), True)
-#
-#         model = tfdf.keras.GradientBoostedTreesModel(hyperparameter_template="benchmark_rank1")
-#
-#         train_ds = tf.data.Dataset.from_tensor_slices((X_balanced_train, y_balanced_train)).batch(1000)
-#         test_ds = tf.data.Dataset.from_tensor_slices((X_balanced_test, y_balanced_test)).batch(1000)
-#         history_dict = {}
-#
-#         # class_weights = (np.bincount(y_train.astype(int)).max() / np.bincount(y_train.astype(int))).tolist()
-#         tuner = tfdf.tuner.RandomSearch(num_trials=15)
-#         tuner.choice("min_examples", [2, 5, 7, 10])
-#         tuner.choice("categorical_algorithm", ["CART", "RANDOM"])
-#         global_search_space = tuner.choice("growing_strategy", ["BEST_FIRST_GLOBAL"])
-#         global_search_space.choice("max_num_nodes", [16, 32, 64, 128, 256])
-#         tuner.choice("use_hessian_gain", [True, False])
-#         tuner.choice("shrinkage", [0.02, 0.05, 0.10, 0.15])
-#         tuner.choice("num_candidate_attributes_ratio", [0.2, 0.5, 0.9, 1.0])
-#
-#         model = tfdf.keras.GradientBoostedTreesModel(hyperparameter_template="benchmark_rank1",
-#                                                      task=tfdf.keras.Task.CLASSIFICATION, tuner=tuner,
-#                                                      l2_regularization=0.01)
-#
-#         model.compile(metrics=["accuracy"])
-#
-#         # Raise the roof with some training!
-#         model.fit(train_ds)
-#         y_pred = model.predict(test_ds, use_multiprocessing=True, workers=5).ravel()
-#
-#
-#         for i in range(10):
-#             y_pred_class = [1. if prob >= (i+1)/10 else 0. for prob in y_pred]
-#             print(f"Threshold: {(i+1)/10}", confusion_matrix(y_balanced_test, y_pred_class))
-#             report_df = pd.concat([pd.DataFrame(classification_report(y_balanced_test, y_pred_class, output_dict=True)).transpose()], keys=[f'{user} - Threshold: {(i+1)/10}'], names=['User-threshold'])
-#             df_list.append(report_df)
-#             print(report_df)
-#     final_df = pd.concat(df_list)
-#     final_df['clf']='Neural network'
-#     final_df.to_csv('verification_test.csv')
-#
-#     # X_test, X_valid, y_test, y_valid = train_test_split(X_test, y_test, test_size=0.5, random_state=365)
-#     # for user in np.unique(y_train):
-#     #     # Create balanced datasets for user and non-user
-#     #     user_mask_train = (y_train == user)
-#     #     non_user_mask_train = (y_train != user)
-#     #
-#     #     user_mask_test = (y_test == user)
-#     #     non_user_mask_test = (y_test != user)
-#     #
-#     #     # Concatenate user and non-user samples (equal numbers)
-#     #     X_balanced_train = np.concatenate([X_train[user_mask_train],
-#     #                                        resample(X_train[non_user_mask_train],
-#     #                                                 n_samples=user_mask_train.sum(),
-#     #                                                 random_state=42)])
-#     #
-#     #     y_balanced_train = np.concatenate([np.ones(user_mask_train.sum()),
-#     #                                        np.zeros(user_mask_train.sum())])  # 1 for user, 0 for non-user
-#     #
-#     #     X_balanced_test = np.concatenate([X_test[user_mask_test],
-#     #                                       resample(X_test[non_user_mask_test],
-#     #                                                n_samples=user_mask_test.sum(),
-#     #                                                random_state=42)])
-#     #
-#     #     y_balanced_test = np.concatenate([np.ones(user_mask_test.sum()),
-#     #                                       np.zeros(user_mask_test.sum())])  # 1 for user, 0 for non-user
-#     #
-#     #     # Shuffling the balanced train and test sets
-#     #     X_balanced_train, y_balanced_train = shuffle(X_balanced_train, y_balanced_train, random_state=42)
-#     #     X_balanced_test, y_balanced_test = shuffle(X_balanced_test, y_balanced_test, random_state=42)
-#     #
-#     #     # Create and compile the model
-#     #     model = KerasNNClf(X_train.shape[1], len(user_names.keys()), True).create_neural_network()
-#     #
-#     #     # Train the model with fewer epochs and a larger batch size
-#     #     history = model.fit(X_balanced_train, y_balanced_train, epochs=100, batch_size=64, callbacks=[model.earlystopping, model.logger])
-#     #
-#     #     # Evaluate the model
-#     #     loss, accuracy = model.evaluate(X_balanced_test, y_balanced_test)
-#     #
-#     #     print('Test loss:', loss)
-#     #     print('Test accuracy:', accuracy)
-#     #
-#     #     # Generate and print the confusion matrix
-#     #     y_pred = model.predict(X_balanced_test).ravel()
-#     #
-#     #     y_pred_class = [1 if prob >= 0.5 else 0 for prob in y_pred]
-#     #     print(confusion_matrix(y_balanced_test, y_pred_class))
-#
-#     # unique_users_train = np.unique(y_train)
-#     # unique_users_test = np.unique(y_test)
-#     # y_train = label_binarize(y_train, classes=unique_users_train.tolist())
-#     # y_test = label_binarize(y_test, classes=unique_users_test.tolist())
-#     #
-#     # n_classes_train = y_train.shape[1]
-#     # n_classes_test = y_test.shape[1]
-#     #
-#     # # Learn to predict each class against the other using RandomForest
-#     # classifier = OneVsRestClassifier(MLPClassifier())
-#     # classifier.fit(X_train, y_train)
-#     #
-#     # # Predict the classes
-#     # y_score = classifier.predict(X_test)
-#     #
-#     # print(y_score)
-#     #
-#     # # Precision, Recall, F1-score
-#     # precision = precision_score(y_test, y_score, average='micro')
-#     # recall = recall_score(y_test, y_score, average='micro')
-#     # f1 = f1_score(y_test, y_score, average='micro')
-#     #
-#     # print("Precision: ", precision)
-#     # print("Recall: ", recall)
-#     # print("F1-score: ", f1)
-#     #
-#     # # ROC AUC
-#     # # For ROC AUC, we need probability estimates of the positive class
-#     # # The classifier should have predict_proba method
-#     #
-#     # y_score_proba = classifier.predict_proba(X_test)
-#     # roc_auc = roc_auc_score(y_test, y_score_proba, multi_class='ovr', average='micro')
-#     #
-#     # print("ROC AUC: ", roc_auc)
+
+    CLASSIFIERS =  [
+        RUSBoostClassifier(n_estimators=200, algorithm='SAMME.R', random_state=0),
+        BalancedRandomForestClassifier(n_estimators=100, random_state=0),
+        BalancedBaggingClassifier(estimator=DecisionTreeClassifier(),
+                                    sampling_strategy='auto',
+                                    replacement=False,
+                                    random_state=0)
+    ]
+    for model in CLASSIFIERS:
+        final_df_list = []
+        for user in np.unique(y):
+            logger.info(f'Starting train & evaluation process with {user}')
+            print()
+            final_df_list.append(train_and_evaluate_for_user(model, None, X, y, X_test, y_test, user=user,
+                                                             plot_path=f'results_verification/{NUMBER_OF_FEATURES}_{N_GRAM_SIZE}',oversample=OVERSAMPLE,
+                                                             title=f'{model.__class__.__name__}_undersample_{user}'))
+
+        df = pd.concat(final_df_list, ignore_index=True)
+        df['Number of features'] = NUMBER_OF_FEATURES
+        df['N-gram sizes'] = N_GRAM_SIZE
+        df['Classifier'] = model.__class__.__name__
+        df['Oversample'] = OVERSAMPLE
+        filename=f'results_verification/{NUMBER_OF_FEATURES}_{N_GRAM_SIZE}.csv'
+        df.to_csv(filename, mode='a+', header=not os.path.exists(filename) or pd.read_csv(filename).empty)
