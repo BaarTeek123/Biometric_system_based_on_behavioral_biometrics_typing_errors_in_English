@@ -7,7 +7,7 @@ from decorators import log_info
 from draw_results import plot_curves_and_matrix
 # draw_system_t_roc_curve, draw_system_roc_curve
 from logger import logger
-
+import numpy as np
 
 def shapiro_tests(model_1_results, model_2_results, column_name = 'accuracy', alpha = 0.05):
     stat1, p1 = shapiro(model_1_results[column_name])

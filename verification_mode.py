@@ -275,7 +275,7 @@ def train_and_evaluate_for_user(model, params, X_train, y_train, X_test, y_test,
 if __name__ == '__main__':
     NUMBER_OF_FEATURES = 5
     N_GRAM_SIZE = 2
-    OVERSAMPLE = False
+    OVERSAMPLE = 'NEARMISS + BorderlineSMOTE'
     X, y, X_test, y_test = create_dataset(if_separate_words=True, test_ratio=0.5, verbose_mode=False,
                                                 scaler=Normalizer(), n_gram_size=N_GRAM_SIZE, number_of_features=NUMBER_OF_FEATURES)
     model = tfdf.keras.GradientBoostedTreesModel(hyperparameter_template="benchmark_rank1",
@@ -299,7 +299,7 @@ if __name__ == '__main__':
             logger.info(f'Starting train & evaluation process with {user}')
             print()
             final_df_list.append(train_and_evaluate_for_user(model, None, X, y, X_test, y_test, user=user,
-                                                             plot_path=f'results_verification/{NUMBER_OF_FEATURES}_{N_GRAM_SIZE}',oversample=OVERSAMPLE,
+                                                             plot_path=f'results_verification/{NUMBER_OF_FEATURES}_{N_GRAM_SIZE}',oversample=bool(OVERSAMPLE),
                                                              title=f'{model.__class__.__name__}_undersample_{user}'))
 
         df = pd.concat(final_df_list, ignore_index=True)
@@ -308,4 +308,4 @@ if __name__ == '__main__':
         df['Classifier'] = model.__class__.__name__
         df['Oversample'] = OVERSAMPLE
         filename=f'results_verification/{NUMBER_OF_FEATURES}_{N_GRAM_SIZE}.csv'
-        df.to_csv(filename, mode='a+', header=not os.path.exists(filename) or pd.read_csv(filename).empty)
+        df.to_csv(filename, mode='a+', header=not os.path.exists(filename) or os.path.getsize(filename) < 10)
